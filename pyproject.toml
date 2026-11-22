@@ -1,0 +1,46 @@
+[project]
+name = "kol-studio"
+version = "0.1.0"
+description = "Hebrew voice studio: nikud, speech, voice characters, stories, documents and transcription — local models first"
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-multipart",
+    "numpy",
+    "scipy",
+    "soundfile",
+    "av==18.1.1",                 # 19.x breaks faster-whisper 1.2 (metadata_errors)
+    "jiwer",
+    "faster-whisper>=1.2,<1.3",
+    "onnxruntime>=1.27,<1.30",
+    "renikud-plus==0.5.0",        # BlueV3's Hebrew G2P (Apache-2.0 weights, MIT code)
+    "phonikud-onnx>=1.0.5",
+    "heb-tts-normalizer==0.2.0",
+    "hebrew-num2words==0.1.0",
+    "num2words",
+    "librosa",                    # used by blue_onnx to build cloned voices
+    "huggingface-hub>=0.26",
+    "python-docx",
+    "python-pptx",
+    "pypdf",
+    "pywebview>=5",
+    "psutil",                     # memory size on Windows / Linux
+]
+# blue-onnx is installed separately WITHOUT its dependencies (see scripts/setup_dev.sh):
+# its phonemizer / espeak-ng dependencies are GPL and only serve non-Hebrew languages.
+
+[project.scripts]
+kol-studio = "kol_studio.desktop:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["kol_studio"]
+
+[tool.setuptools.package-data]
+kol_studio = ["index.html"]
