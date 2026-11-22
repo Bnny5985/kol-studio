@@ -24,7 +24,7 @@
 | NumPy, SciPy, librosa, soundfile | BSD / ISC |
 | PyAV (כולל ספריות FFmpeg) | BSD (PyAV), LGPL (FFmpeg) |
 | num2words, soxr | LGPL-2.1 (נטענות כספריות נפרדות) |
-| python-docx, python-pptx, pypdf, jiwer | MIT / BSD / Apache-2.0 |
+| python-docx, python-pptx, pypdf | MIT / BSD |
 
 **הושמטו בכוונה:** ל־BlueTTS יש תלות ב־`phonemizer` וב־`espeak-ng`, ששתיהן ברישיון GPL. הן משמשות רק לשפות שאינן עברית, ולכן הן לא מותקנות ולא נכללות בקובצי ההתקנה.
 

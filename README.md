@@ -37,6 +37,8 @@
 ```bash
 ./scripts/setup_dev.sh                 # macOS / Linux, needs uv
 .venv/bin/python -m kol_studio.desktop # the app
+./scripts/dev_server.sh                # server only, http://127.0.0.1:8765
+.venv/bin/pytest -q                    # tests
 ./packaging/mac/build_mac.sh           # DMG installer
 ```
 

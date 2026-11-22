@@ -14,7 +14,7 @@ datas, binaries, hiddenimports = [], [], []
 for pkg in [
     "kol_studio", "blue_onnx", "renikud_onnx", "phonikud_onnx", "faster_whisper", "ctranslate2", "onnxruntime",
     "heb_tts_normalizer", "hebrew_num2words", "num2words", "librosa", "soxr", "lazy_loader", "docx", "pptx", "pypdf",
-    "jiwer", "rapidfuzz", "av", "soundfile", "tokenizers", "uvicorn", "fastapi", "python_multipart", "multipart",
+    "av", "soundfile", "tokenizers", "uvicorn", "fastapi", "python_multipart", "multipart",
     "webview", "huggingface_hub",
 ]:
     d, b, h = collect_all(pkg)

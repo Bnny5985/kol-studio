@@ -1,181 +1,253 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="he" dir="rtl" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>קול־סטודיו</title>
 <style>
+  /* ============ design tokens ============ */
   :root {
-    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e2e0da;
-    --accent: #2f5bd3; --accent-ink: #fff; --ok: #1f7a4d; --err: #b3261e; --warn: #8a5a00;
-    --soft: color-mix(in srgb, var(--accent) 12%, var(--panel));
-    --stage: #0e0f13; --stage-ink: #8b8f9c; --stage-done: color-mix(in srgb, var(--stage-ink) 45%, var(--stage)); --stage-now: #ffd25e;
-    --radius: 12px; --font: "Assistant", "Heebo", -apple-system, "Segoe UI", Arial, sans-serif; --text-size: 19px;
+    --accent: #ff4fa3; --accent2: #ff8a3d; --accent-ink: #fff;
+    --grad: linear-gradient(135deg, var(--accent), var(--accent2));
+    --radius: 18px; --font: -apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif; --text-size: 19px;
+    --stage: #0d0e22; --stage-ink: #8e90b5; --stage-now: #ffd25e;
+    --stage-done: color-mix(in srgb, var(--stage-ink) 40%, var(--stage));
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #151517; --panel: #1f1f22; --ink: #ececef; --muted: #9a9aa2; --line: #333338;
-            --ok: #5fd39a; --err: #ff8a80; --warn: #f0c060; }
+  :root[data-theme="dark"] {
+    --bg: #0d0e24; --bg-glow1: #ff4fa35c; --bg-glow2: #7c5cff55; --bg-glow3: #22d3ee38;
+    --panel: rgba(255, 255, 255, .055); --panel-2: rgba(255, 255, 255, .09); --field: rgba(255, 255, 255, .06);
+    --ink: #eef0ff; --muted: #9a9cc6; --line: rgba(255, 255, 255, .10); --shadow: 0 14px 40px rgba(3, 3, 18, .5);
+    --ok: #4ee3a3; --err: #ff7a8a; --warn: #ffc65c;
   }
-  :root[data-theme="dark"] { --bg: #151517; --panel: #1f1f22; --ink: #ececef; --muted: #9a9aa2; --line: #333338;
-          --ok: #5fd39a; --err: #ff8a80; --warn: #f0c060; }
+  :root[data-theme="light"] {
+    --bg: #f2efff; --bg-glow1: #ff4fa322; --bg-glow2: #7c5cff22; --bg-glow3: #22d3ee22;
+    --panel: rgba(255, 255, 255, .72); --panel-2: rgba(255, 255, 255, .92); --field: rgba(255, 255, 255, .9);
+    --ink: #1c1a36; --muted: #67658f; --line: rgba(40, 30, 100, .11); --shadow: 0 12px 34px rgba(60, 40, 140, .12);
+    --ok: #12935d; --err: #d23a4f; --warn: #a86b00;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font); }
-  header { padding: 20px 24px 0; max-width: 1040px; margin: 0 auto; position: relative; }
-  #gear { position: absolute; left: 24px; top: 20px; background: var(--soft); color: var(--ink); border: 1px solid var(--line);
-          border-radius: 999px; padding: 6px 14px; font: inherit; cursor: pointer; }
-  #gear.on { border-color: var(--accent); color: var(--accent); }
-  .card, .char, .cast .who, .pick-item, textarea, pre { border-radius: var(--radius) !important; }
-  textarea { font-family: var(--font) !important; }
-  textarea:not(.small):not(.script) { font-size: var(--text-size) !important; }
-  #stage p { font-family: var(--font) !important; }
+  html, body { min-height: 100%; }
+  body { margin: 0; color: var(--ink); font: 16px/1.6 var(--font); background: var(--bg); overflow-x: hidden; }
+  body::before { content: ""; position: fixed; inset: -20vmax; z-index: -1; pointer-events: none;
+    background: radial-gradient(40vmax 40vmax at 85% 10%, var(--bg-glow1), transparent 70%),
+                radial-gradient(45vmax 45vmax at 10% 30%, var(--bg-glow2), transparent 70%),
+                radial-gradient(40vmax 40vmax at 60% 95%, var(--bg-glow3), transparent 70%); }
+  a { color: color-mix(in srgb, var(--accent) 80%, var(--ink)); }
+  ::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 
-  /* ---- settings ---- */
-  .hw { display: flex; flex-wrap: wrap; gap: 8px; }
-  .hw span { background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 14px; }
-  .hw b { color: var(--accent); }
-  .mcat { margin-top: 14px; } .mcat h3 { font-size: 15px; margin: 0 0 6px; }
-  .mrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
-          margin-bottom: 6px; background: var(--bg); }
-  .mrow.active { border-color: var(--accent); background: var(--soft); }
-  .mrow.off { opacity: .55; }
-  .mrow .mn { flex: 1; } .mrow .mn small { display: block; color: var(--muted); font-size: 13px; }
-  .badge { font-size: 12px; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--line); white-space: nowrap; }
-  .badge.rec { border-color: var(--ok); color: var(--ok); } .badge.no { color: var(--warn); border-color: var(--warn); }
-  .swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--panel); outline: 1px solid var(--line); cursor: pointer; }
-  .swatch.sel { outline: 2px solid var(--ink); }
-  input[type=color] { width: 44px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 2px; }
-  .setgrid { display: grid; grid-template-columns: 160px 1fr; gap: 10px 14px; align-items: center; }
-  @media (max-width: 640px) { .setgrid { grid-template-columns: 1fr; } }
-  .preview-tp { background: var(--stage); border-radius: var(--radius); padding: 14px 20px; font: 600 22px/1.6 var(--font); }
-  .preview-tp .a { color: color-mix(in srgb, var(--stage-ink) 45%, var(--stage)); } .preview-tp .b { color: var(--stage-now); }
-  .preview-tp .c { color: var(--stage-ink); }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
-  .seg button { border: 0; background: var(--bg); color: var(--ink); padding: 6px 14px; font: inherit; cursor: pointer; }
-  .seg button.on { background: var(--accent); color: var(--accent-ink); }
-  .reply { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
-  h1 { margin: 0; font-size: 22px; }
-  .sub { color: var(--muted); font-size: 14px; }
-  nav { display: flex; gap: 4px; margin-top: 16px; border-bottom: 1px solid var(--line); overflow-x: auto; }
-  nav button { background: none; border: 0; padding: 10px 16px; font: inherit; color: var(--muted);
-               cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
-  nav button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
-  main { max-width: 1040px; margin: 0 auto; padding: 20px 24px 60px; }
-  section { display: none; } section.on { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
-  .card h2 { margin: 0 0 10px; font-size: 17px; }
-  textarea { width: 100%; min-height: 130px; padding: 12px; border: 1px solid var(--line); border-radius: 8px;
-             background: var(--bg); color: var(--ink); font: 19px/1.9 "Assistant", "Heebo", Arial, sans-serif; resize: vertical; }
-  textarea.nikud { font-size: 23px; line-height: 2.1; }
-  textarea.small { min-height: 70px; font-size: 16px; }
-  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
-  button.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 9px 18px;
-               font: inherit; font-weight: 600; cursor: pointer; }
-  button.btn.sec { background: var(--soft); color: var(--ink); }
-  button.btn:disabled { opacity: .5; cursor: wait; }
-  select, input[type=text], input[type=number] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
-             background: var(--bg); color: var(--ink); font: inherit; }
+  /* ============ layout ============ */
+  header { max-width: 1180px; margin: 0 auto; padding: 22px 24px 0; display: flex; align-items: center; gap: 14px; }
+  .logo { width: 48px; height: 48px; border-radius: 14px; background: var(--grad); display: grid; place-items: center;
+          color: #fff; font: 800 28px/1 var(--font); box-shadow: 0 8px 26px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .brand { flex: 1; min-width: 0; }
+  .brand h1 { margin: 0; font-size: 22px; letter-spacing: .2px; }
+  .brand .sub { margin: 0; }
+  .icon-btn { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel);
+              color: var(--ink); cursor: pointer; display: grid; place-items: center; font-size: 19px; position: relative;
+              backdrop-filter: blur(14px); text-decoration: none; }
+  .icon-btn:hover { background: var(--panel-2); }
+  .icon-btn.on { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .icon-btn .dot { position: absolute; top: 6px; left: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--grad);
+                   box-shadow: 0 0 10px var(--accent); display: none; }
+  .icon-btn.has-update .dot { display: block; }
+  nav.tabs { max-width: 1180px; margin: 18px auto 0; padding: 0 24px; }
+  nav.tabs .bar { display: inline-flex; gap: 4px; padding: 5px; border-radius: 999px; background: var(--panel);
+                  border: 1px solid var(--line); backdrop-filter: blur(14px); max-width: 100%; overflow-x: auto; }
+  nav.tabs button { border: 0; background: transparent; color: var(--muted); padding: 9px 18px; border-radius: 999px;
+                    font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: color .2s, background .2s; }
+  nav.tabs button:hover { color: var(--ink); }
+  nav.tabs button.on { color: #fff; background: var(--grad); box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent); }
+  main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 70px; }
+  section { display: none; animation: rise .25s ease; } section.on { display: block; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .story-grid { display: grid; grid-template-columns: 1fr 310px; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .two, .story-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { header, nav.tabs, main { padding-inline: 16px; } .brand .sub { display: none; } }
+
+  /* ============ components ============ */
+  .card { background: linear-gradient(160deg, var(--panel-2), var(--panel) 45%); border: 1px solid var(--line);
+          border-radius: var(--radius); padding: 20px 22px; margin-bottom: 18px; box-shadow: var(--shadow);
+          backdrop-filter: blur(18px); position: relative; }
+  .card::after { content: ""; position: absolute; inset: 0 18% auto; height: 1px; pointer-events: none;
+                 background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent), transparent); }
+  .card h2 { margin: 0 0 4px; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  .card h2::before { content: ""; width: 10px; height: 10px; border-radius: 4px; background: var(--grad);
+                     box-shadow: 0 0 12px var(--accent); flex: none; }
+  .card h3 { font-size: 15px; margin: 18px 0 8px; }
+  .sub, .hint { color: var(--muted); font-size: 14px; }
+  .hint { font-size: 13px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+  .spacer { flex: 1; }
+  .btn { border: 0; border-radius: 12px; padding: 10px 18px; font: inherit; font-weight: 650; cursor: pointer; color: #fff;
+         background: var(--grad); box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 35%, transparent);
+         transition: transform .15s, box-shadow .15s, filter .15s; white-space: nowrap; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06); }
+  .btn.sec { background: var(--panel-2); color: var(--ink); box-shadow: none; border: 1px solid var(--line); }
+  .btn.sec:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+  .btn.small { padding: 6px 12px; font-size: 14px; border-radius: 10px; }
+  .btn:disabled { opacity: .5; cursor: wait; transform: none; }
+  .btn.rec { background: linear-gradient(135deg, #ff3b5c, #ff7a59) !important; color: #fff !important; }
+  input[type=text], input[type=number], input[type=search], input[type=password], select, textarea {
+    background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; font: inherit;
+    padding: 9px 12px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  input:focus, select:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  select option { background: var(--bg); color: var(--ink); }
+  input[type=file] { color: var(--muted); font: inherit; font-size: 14px; max-width: 100%; }
+  input[type=file]::file-selector-button { border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+    border-radius: 10px; padding: 7px 12px; margin-inline-end: 10px; font: inherit; cursor: pointer; }
+  input[type=range] { accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; vertical-align: middle; }
+  textarea { width: 100%; min-height: 140px; resize: vertical; font-size: var(--text-size); line-height: 1.9; margin-top: 12px; }
+  textarea.nikud { font-size: calc(var(--text-size) + 4px); line-height: 2.1; }
+  textarea.small { min-height: 74px; font-size: 16px; margin-top: 6px; }
+  textarea.script { min-height: 360px; font-size: 18px; line-height: 2; }
   label { color: var(--muted); font-size: 14px; }
   .status { font-size: 14px; color: var(--muted); min-height: 1.4em; }
   .status.err { color: var(--err); } .status.ok { color: var(--ok); } .status.warn { color: var(--warn); }
-  audio { width: 100%; margin-top: 10px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .char { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--bg); }
-  .char b { display: block; } .char small { color: var(--muted); display: block; }
-  .char .acts { display: flex; gap: 6px; margin-top: 6px; }
-  .char .acts button { padding: 5px 10px; font-size: 14px; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } header, main { padding-inline: 16px; } }
-  pre { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
-        max-height: 320px; overflow: auto; font-size: 14px; direction: rtl; }
-  .rec { background: var(--err) !important; color: #fff !important; }
-  .file { display: inline-flex; gap: 8px; align-items: center; }
-  progress { width: 220px; }
-  .hint { font-size: 13px; color: var(--muted); }
+  audio { width: 100%; margin-top: 12px; border-radius: 999px; }
+  :root[data-theme="dark"] audio { filter: invert(1) hue-rotate(180deg) saturate(.7); opacity: .9; }
+  progress { width: 220px; height: 8px; border-radius: 99px; overflow: hidden; appearance: none; border: 0; background: var(--field); }
+  progress::-webkit-progress-bar { background: var(--field); }
+  progress::-webkit-progress-value { background: var(--grad); border-radius: 99px; }
+  pre { white-space: pre-wrap; background: var(--field); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+        max-height: 340px; overflow: auto; font: 15px/1.8 var(--font); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid var(--line); background: var(--field); color: var(--ink); border-radius: 999px; padding: 6px 14px;
+          font: inherit; font-size: 14px; cursor: pointer; transition: all .15s; }
+  .chip:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+  .chip.on { color: #fff; border-color: transparent; background: var(--grad);
+             box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .chip small { opacity: .75; }
+  .badge { font-size: 12px; border-radius: 999px; padding: 2px 9px; border: 1px solid var(--line); white-space: nowrap; color: var(--muted); }
+  .badge.ok { border-color: color-mix(in srgb, var(--ok) 60%, transparent); color: var(--ok); }
+  .badge.warn { border-color: color-mix(in srgb, var(--warn) 60%, transparent); color: var(--warn); }
+  .readout { font-size: 26px; font-weight: 750; background: var(--grad); -webkit-background-clip: text; background-clip: text;
+             color: transparent; line-height: 1.2; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 30px); opacity: 0; transition: all .25s;
+           background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 9px 18px; z-index: 50;
+           box-shadow: var(--shadow); backdrop-filter: blur(16px); pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  dialog { width: min(540px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 22px; padding: 22px;
+           background: color-mix(in srgb, var(--bg) 88%, #fff 2%); color: var(--ink); box-shadow: var(--shadow); }
+  dialog::backdrop { background: rgba(5, 5, 20, .6); backdrop-filter: blur(4px); }
+  mark { background: color-mix(in srgb, var(--accent) 40%, transparent); color: inherit; border-radius: 4px; }
 
-  /* ---- teleprompter ---- */
-  #stage { background: var(--stage); border-radius: 14px; height: 62vh; min-height: 360px; overflow-y: auto;
-           position: relative; scroll-behavior: smooth; padding: 0 8%; }
+  /* ============ characters ============ */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 14px; }
+  .char { border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--field); position: relative; }
+  .char .av { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: #fff;
+              margin-bottom: 8px; }
+  .char b { display: block; font-size: 16px; } .char small { color: var(--muted); display: block; font-size: 13px; }
+  .char .acts { display: flex; gap: 6px; margin-top: 10px; }
+
+  /* ============ teleprompter ============ */
+  #stage { background: var(--stage); border-radius: var(--radius); height: 62vh; min-height: 360px; overflow-y: auto;
+           position: relative; scroll-behavior: smooth; padding: 0 8%; border: 1px solid var(--line); box-shadow: var(--shadow); }
   #stage:fullscreen { border-radius: 0; height: 100vh; padding: 0 12%; }
   #stage .pad { height: 50%; }
-  #stage h3 { color: #6f8cff; font-size: .6em; margin: 1.4em 0 .4em; font-weight: 600; }
-  #stage p { margin: 0; padding: .18em 0; color: var(--stage-ink); cursor: pointer; transition: color .25s, transform .25s;
-             font: 600 var(--tp-size, 36px)/1.55 "Assistant", "Heebo", Arial, sans-serif; }
+  #stage h3 { color: color-mix(in srgb, var(--accent) 75%, #fff); font-size: .6em; margin: 1.4em 0 .4em; font-weight: 650; }
+  #stage p { margin: 0; padding: .18em 0; color: var(--stage-ink); cursor: pointer; transition: color .25s;
+             font: 650 var(--tp-size, 36px)/1.55 var(--font); }
   #stage p.done { color: var(--stage-done); }
-  #stage p.now { color: var(--stage-now); }
-  #stage::before { content: ""; position: sticky; top: calc(50% - 1px); display: block; height: 0;
-                   border-top: 1px dashed #2a2d36; z-index: 0; }
-  .tpbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
-  .tpbar .big { font-size: 20px; min-width: 64px; }
+  #stage p.now { color: var(--stage-now); text-shadow: 0 0 24px color-mix(in srgb, var(--stage-now) 35%, transparent); }
   .empty { color: var(--stage-ink); text-align: center; padding-top: 25vh; font-size: 20px; }
+  .tpbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; padding: 12px 16px;
+           background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); backdrop-filter: blur(14px); }
+  .tpbar .big { font-size: 18px; min-width: 56px; }
 
-  /* ---- story ---- */
-  main:has(#story.on) { max-width: 1280px; }
-  .story-grid { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
-  @media (max-width: 900px) { .story-grid { grid-template-columns: 1fr; } }
-  textarea.script { min-height: 340px; font-size: 18px; line-height: 2; }
-  .palette { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
-  .pal-h { font-size: 14px; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
+  /* ============ story ============ */
+  .palette { position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow: auto; }
+  .pal-h { font-size: 13px; margin: 16px 0 7px; color: var(--muted); font-weight: 650; }
   .pal-btns { display: flex; flex-wrap: wrap; gap: 6px; }
-  .pal-btns button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px;
-                     padding: 4px 12px; font: inherit; font-size: 14px; cursor: pointer; }
-  .pal-btns button:hover { border-color: var(--accent); }
+  .pal-btns button { border: 1px solid var(--line); background: var(--field); color: var(--ink); border-radius: 999px;
+                     padding: 4px 12px; font: inherit; font-size: 14px; cursor: pointer; transition: all .15s; }
+  .pal-btns button:hover { border-color: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent); }
   .pal-btns button.style { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-  .pal-btns button.char { background: var(--soft); }
-  .cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
-  .cast .who { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px;
-               padding: 6px 10px; background: var(--bg); }
-  .cast .who b { min-width: 70px; }
-  .cast .who select { flex: 1; min-width: 0; }
-  .pal-btns button.add { border-style: dashed; color: var(--accent); }
-  dialog#setup { width: min(560px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 14px;
-                 background: var(--panel); color: var(--ink); padding: 22px; }
-  dialog#setup::backdrop { background: rgba(0, 0, 0, .55); }
-  dialog#pick { width: min(520px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 14px;
-                background: var(--panel); color: var(--ink); padding: 18px; }
-  dialog#pick::backdrop { background: rgba(0, 0, 0, .45); }
-  .pick-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .pal-btns button.char { background: var(--panel-2); }
+  .pal-btns button.add { border-style: dashed; color: color-mix(in srgb, var(--accent) 80%, var(--ink)); }
+  .cast { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin-top: 12px; }
+  .cast .who { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 14px;
+               padding: 7px 10px; background: var(--field); }
+  .cast .who b { min-width: 70px; } .cast .who select { flex: 1; min-width: 0; }
+  .pick-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .pick-head h2 { margin: 0; font-size: 18px; }
-  .pick-head button { padding: 4px 10px; }
-  #pickQ { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
-           color: var(--ink); font: inherit; font-size: 17px; }
+  #pickQ { width: 100%; font-size: 17px; }
   .pick-list { max-height: 55vh; overflow: auto; margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
-  .pick-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  .pick-item { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 12px; cursor: pointer;
                border: 1px solid transparent; }
-  .pick-item:hover, .pick-item.sel { background: var(--soft); border-color: var(--line); }
+  .pick-item:hover, .pick-item.sel { background: var(--panel-2); border-color: var(--line); }
   .pick-item .nm { flex: 1; } .pick-item .nm small { color: var(--muted); display: block; font-size: 13px; }
   .pick-item .in-story { font-size: 12px; color: var(--ok); }
-  .pick-item button { padding: 4px 10px; font-size: 13px; }
-  .pick-item.new .nm { color: var(--accent); }
-  mark { background: color-mix(in srgb, var(--stage-now) 55%, transparent); color: inherit; border-radius: 3px; }
+  .pick-item.new .nm { color: color-mix(in srgb, var(--accent) 80%, var(--ink)); }
+
+  /* ============ settings ============ */
+  .subnav { position: sticky; top: 10px; z-index: 5; margin-bottom: 16px; }
+  .subnav .chips { display: inline-flex; padding: 6px; border-radius: 999px; background: color-mix(in srgb, var(--bg) 80%, transparent);
+                   border: 1px solid var(--line); backdrop-filter: blur(16px); box-shadow: var(--shadow); max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .subnav .chip { white-space: nowrap; }
+  #settings .card { scroll-margin-top: 76px; }
+  .hw { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .hw span { background: var(--field); border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; font-size: 14px; }
+  .hw b { color: color-mix(in srgb, var(--accent) 75%, var(--ink)); }
+  .mrow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px;
+          margin-bottom: 7px; background: var(--field); flex-wrap: wrap; }
+  .mrow.active { border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+                 box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); }
+  .mrow.off { opacity: .55; }
+  .mrow .mn { flex: 1; min-width: 200px; } .mrow .mn small { display: block; color: var(--muted); font-size: 13px; }
+  .setting { padding: 16px 0; border-top: 1px solid var(--line); }
+  .setting:first-of-type { border-top: 0; }
+  .setting-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .setting-head b { font-size: 16px; }
+  .path { flex: 1; min-width: 240px; direction: ltr; text-align: left; font-family: ui-monospace, Menlo, Consolas, monospace;
+          font-size: 13px; padding: 10px 12px; border-radius: 12px; background: var(--field); border: 1px solid var(--line);
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .range-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .range-row input[type=range] { flex: 1; min-width: 200px; }
+  .swatches { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
+            outline: 1px solid var(--line); outline-offset: 2px; }
+  .swatch.sel { outline: 2px solid var(--ink); }
+  input[type=color] { width: 40px; height: 34px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); padding: 3px; }
+  .setgrid { display: grid; grid-template-columns: 170px 1fr; gap: 14px 16px; align-items: center; margin-top: 14px; }
+  @media (max-width: 640px) { .setgrid { grid-template-columns: 1fr; } }
+  .preview-tp { background: var(--stage); border-radius: var(--radius); padding: 14px 20px; font: 650 22px/1.6 var(--font); }
+  .preview-tp .a { color: var(--stage-done); } .preview-tp .b { color: var(--stage-now); } .preview-tp .c { color: var(--stage-ink); }
+  .reply { background: var(--field); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 12px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-top: 12px; }
 </style>
 </head>
 <body>
 <header>
-  <button id="gear" title="הגדרות">⚙ הגדרות</button>
-  <h1>קול־סטודיו</h1>
-  <div class="sub">הכל רץ על המחשב שלך · ניקוד: phonikud · הקראה: BlueV3 · תמלול: ivrit.ai ·
-    <a href="" id="openBrowser" target="_blank" rel="noopener" title="אם המיקרופון לא עובד בחלון התוכנה">פתח בדפדפן</a></div>
-  <nav>
-    <button data-tab="speak" class="on">הקראה</button>
-    <button data-tab="reader">קורא מסמכים</button>
-    <button data-tab="story">סיפור</button>
-    <button data-tab="chars">דמויות</button>
-    <button data-tab="asr">תמלול</button>
-  </nav>
+  <div class="logo" aria-hidden="true">ק</div>
+  <div class="brand">
+    <h1>קול־סטודיו</h1>
+    <p class="sub">ניקוד, הקראה, דמויות ותמלול בעברית — הכל רץ על המחשב שלך</p>
+  </div>
+  <a class="icon-btn" id="openBrowser" href="" target="_blank" rel="noopener" title="פתח בדפדפן (אם המיקרופון לא עובד בחלון התוכנה)">↗</a>
+  <button class="icon-btn" id="gear" title="הגדרות" aria-label="הגדרות">⚙<span class="dot"></span></button>
 </header>
+<nav class="tabs"><div class="bar">
+  <button data-tab="speak" class="on">הקראה</button>
+  <button data-tab="reader">קורא מסמכים</button>
+  <button data-tab="story">סיפור</button>
+  <button data-tab="chars">דמויות</button>
+  <button data-tab="asr">תמלול</button>
+</div></nav>
 <main>
 
 <!-- ================= הקראה ================= -->
 <section id="speak" class="on">
   <div class="card">
     <h2>1. טקסט</h2>
-    <div class="row" style="margin-top:0">
-      <span class="file"><input type="file" id="docFile" accept=".txt,.md,.docx,.doc,.pdf,.pptx,.epub,.rtf,.odt,.html,.htm,.srt"></span>
+    <div class="sub">Word, PDF, מצגות PowerPoint, EPUB או טקסט. שורה שמתחילה ב־"# " פותחת חלק חדש.</div>
+    <div class="row">
+      <input type="file" id="docFile" accept=".txt,.md,.docx,.doc,.pdf,.pptx,.epub,.rtf,.odt,.html,.htm,.srt">
       <button class="btn sec" id="loadDoc">טען קובץ</button>
       <span class="status" id="docStatus"></span>
     </div>
-    <div class="hint">Word, PDF, מצגות PowerPoint, EPUB, טקסט. שורה שמתחילה ב־"# " פותחת חלק חדש (קובץ שמע נפרד).</div>
     <textarea id="plain" placeholder="הדבק כאן טקסט בעברית, או טען קובץ…"># פתיחה
 שלום, קוראים לי דנה. היום אספר לכם על המחקר שלי בבלשנות.
 
@@ -189,7 +261,7 @@
     <textarea id="pointed" class="nikud"></textarea>
     <div class="row">
       <label>דמות</label><select id="voice"></select>
-      <label>מהירות</label><input type="number" id="speed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:80px">
+      <label>מהירות</label><input type="number" id="speed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:84px">
       <button class="btn" id="doSpeak">הקרא ▶</button>
       <span class="status" id="speakStatus"></span>
     </div>
@@ -197,22 +269,23 @@
     <div class="row"><a id="dl" download="hakraa.wav" style="display:none">⬇ הורד קובץ WAV</a></div>
   </div>
   <div class="card">
-    <h2>3. ייצוא לתיקייה — קבצים קטנים + פלייליסט</h2>
-    <div class="sub">כל חלק הופך לקובץ MP3 ממוספר לפי הסדר, עם קובץ playlist.m3u8, תוכן עניינים, והטקסט המנוקד של כל חלק.</div>
+    <h2>3. ייצוא לתיקייה</h2>
+    <div class="sub">כל חלק הופך לקובץ MP3 ממוספר, עם פלייליסט, תוכן עניינים והטקסט המנוקד. <span id="expEstimate"></span></div>
     <div class="row">
-      <label>שם</label><input type="text" id="expTitle" value="הקראה" style="width:220px">
+      <label>שם</label><input type="text" id="expTitle" value="הקראה" style="width:230px">
       <button class="btn" id="doExport">צור תיקייה</button>
       <progress id="expProg" value="0" max="1" style="display:none"></progress>
       <span class="status" id="expStatus"></span>
-      <button class="btn sec" id="expOpen" style="display:none">פתח ב־Finder</button>
+      <button class="btn sec" id="expOpen" style="display:none">פתח את התיקייה</button>
     </div>
   </div>
 </section>
 
-<!-- ================= קורא מסמכים (טלפרומפטר) ================= -->
+<!-- ================= קורא מסמכים ================= -->
 <section id="reader">
   <div class="card">
-    <div class="row" style="margin-top:0">
+    <h2>קורא מסמכים</h2>
+    <div class="row">
       <input type="file" id="rdFile" accept=".txt,.md,.docx,.doc,.pdf,.pptx,.epub,.rtf,.odt,.html,.htm,.srt">
       <button class="btn sec" id="rdLoad">טען מסמך או ספר</button>
       <button class="btn sec" id="rdFromText">קח את הטקסט מעמוד ההקראה</button>
@@ -225,7 +298,7 @@
     <button class="btn big" id="tpPlay" title="נגן / השהה (רווח)">▶</button>
     <button class="btn sec big" id="tpNext" title="משפט הבא (חץ שמאלה)">⏭</button>
     <label>דמות</label><select id="tpVoice"></select>
-    <label>מהירות</label><input type="number" id="tpSpeed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:76px">
+    <label>מהירות</label><input type="number" id="tpSpeed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:80px">
     <label>גודל</label><input type="range" id="tpSize" min="22" max="72" value="36">
     <label><input type="checkbox" id="tpNikud"> הצג ניקוד</label>
     <button class="btn sec" id="tpFull">מסך מלא</button>
@@ -251,7 +324,7 @@
         </div>
         <div id="stErrors" class="status warn"></div>
         <audio id="stPlayer" controls style="display:none"></audio>
-        <div class="row"><button class="btn sec" id="stOpen" style="display:none">פתח את התיקייה ב־Finder</button>
+        <div class="row"><button class="btn sec" id="stOpen" style="display:none">פתח את התיקייה</button>
           <span class="hint" id="stFiles"></span></div>
       </div>
       <div class="card">
@@ -259,14 +332,15 @@
         <div id="stCast" class="cast"></div>
         <div class="row">
           <button class="btn sec" id="stAddChar">+ הוסף דמות</button>
-          <label>מהירות כללית</label><input type="number" id="stSpeed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:76px">
-          <label>רווח בין שורות</label><input type="number" id="stGap" value="0.35" min="0" max="3" step="0.05" style="width:76px">
+          <span class="spacer"></span>
+          <label>מהירות כללית</label><input type="number" id="stSpeed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:80px">
+          <label>רווח בין שורות</label><input type="number" id="stGap" value="0.35" min="0" max="3" step="0.05" style="width:80px">
         </div>
       </div>
     </div>
     <div class="card palette">
       <h2>הוראות בימוי</h2>
-      <div class="hint">לחץ כדי להוסיף במקום הסמן. סגנון (רגש / אופן דיבור) חל מהמקום שלו עד סוף השורה.</div>
+      <div class="hint">לחץ כדי להוסיף במקום הסמן. רגש או אופן דיבור חלים מהמקום שלהם עד סוף השורה.</div>
       <div id="stPalette"></div>
       <h3 class="pal-h">דמויות</h3>
       <div class="pal-btns"><button class="add" id="stAddChar2">+ הוסף דמות</button></div>
@@ -274,13 +348,10 @@
     </div>
   </div>
   <dialog id="pick">
-    <div class="pick-head">
-      <h2>הוסף דמות לסיפור</h2>
-      <button class="btn sec" id="pickClose" aria-label="סגור">✕</button>
-    </div>
+    <div class="pick-head"><h2>הוסף דמות לסיפור</h2><button class="btn sec small" id="pickClose" aria-label="סגור">✕</button></div>
     <input type="search" id="pickQ" placeholder="חפש לפי שם או סוג…" autocomplete="off">
     <div id="pickList" class="pick-list"></div>
-    <div class="hint">לחיצה על דמות מוסיפה שורה חדשה שלה במקום הסמן, ומלהקת את הקול שלה.</div>
+    <div class="hint">לחיצה על דמות מוסיפה שורה שלה במקום הסמן ומלהקת את הקול שלה. חצים ו־Enter עובדים.</div>
   </dialog>
 </section>
 
@@ -290,154 +361,28 @@
   <div class="two">
     <div class="card">
       <h2>שכפול קול מהקלטה</h2>
-      <div class="sub">8–10 שניות של דיבור נקי, בלי מוזיקה ברקע. אפשר להעלות הקלטה ארוכה יותר — התוכנה תבחר את הקטע הנקי ביותר.</div>
-      <div class="row"><input type="text" id="cloneName" placeholder="שם הדמות"></div>
+      <div class="sub">8–10 שניות של דיבור נקי, בלי מוזיקה. אפשר הקלטה ארוכה יותר — התוכנה תבחר את הקטע הנקי ביותר.</div>
+      <div class="row"><input type="text" id="cloneName" placeholder="שם הדמות" style="flex:1"></div>
       <div class="row"><input type="file" id="cloneFile" accept="audio/*,video/*"></div>
       <div class="row"><button class="btn sec" id="recBtn">● הקלט מהמיקרופון</button><span class="status" id="recStatus"></span></div>
-      <div class="row" style="flex-direction:column;align-items:stretch">
-        <label>תמלול ההקלטה (לא חובה) — מה נאמר בהקלטה, מילה במילה</label>
-        <textarea id="cloneText" class="small" placeholder="למשל: שלום, קוראים לי דנה ואני חוקרת בלשנות…"></textarea>
-        <div class="row" style="margin-top:4px">
-          <span class="hint">אין לך תמלול?</span>
-          <input type="file" id="cloneTextFile" accept=".txt,.srt,.docx,.md">
-          <button class="btn sec" id="cloneAutoText">תמלל אוטומטית</button>
-        </div>
-        <div class="hint">התמלול משמש לבדיקת איכות ההקלטה ולבחירת הקטע הנקי ביותר. הוא נשמר עם הדמות.</div>
+      <h3>תמלול ההקלטה <span class="hint">(לא חובה)</span></h3>
+      <textarea id="cloneText" class="small" placeholder="מה נאמר בהקלטה, מילה במילה…"></textarea>
+      <div class="row">
+        <input type="file" id="cloneTextFile" accept=".txt,.srt,.docx,.md">
+        <button class="btn sec small" id="cloneAutoText">תמלל אוטומטית</button>
       </div>
+      <div class="hint" style="margin-top:6px">התמלול בודק את איכות ההקלטה ועוזר לבחור את הקטע הנקי. הוא נשמר עם הדמות.</div>
       <div class="row"><label><input type="checkbox" id="consent"> זה הקול שלי, או שיש לי הסכמה של בעל הקול</label></div>
       <div class="row"><button class="btn" id="doClone">צור דמות</button><span class="status" id="cloneStatus"></span></div>
     </div>
     <div class="card">
-      <h2>ערבוב קולות — דמות חדשה</h2>
-      <div class="sub">קול חדש שלא שייך לאף אדם אמיתי.</div>
-      <div class="row"><input type="text" id="mixName" placeholder="שם הדמות"></div>
-      <div class="row"><label>קול א</label><select id="mixA"></select></div>
-      <div class="row"><label>קול ב</label><select id="mixB"></select></div>
-      <div class="row"><label>יחס</label><input type="range" id="mixR" min="0" max="1" step="0.05" value="0.5"><span id="mixRv">50%</span></div>
+      <h2>ערבוב קולות</h2>
+      <div class="sub">קול חדש שלא שייך לאף אדם אמיתי — כמה דמויות שתרצה.</div>
+      <div class="row"><input type="text" id="mixName" placeholder="שם הדמות" style="flex:1"></div>
+      <div class="row"><label style="width:46px">קול א</label><select id="mixA" style="flex:1"></select></div>
+      <div class="row"><label style="width:46px">קול ב</label><select id="mixB" style="flex:1"></select></div>
+      <div class="row range-row"><label>יחס</label><input type="range" id="mixR" min="0" max="1" step="0.05" value="0.5"><b id="mixRv">50%</b></div>
       <div class="row"><button class="btn" id="doMix">צור דמות</button><span class="status" id="mixStatus"></span></div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= התקנה ראשונה ================= -->
-<dialog id="setup">
-  <h2 style="margin-top:0">ברוך הבא לקול־סטודיו</h2>
-  <div class="sub">כדי לעבוד בלי אינטרנט, התוכנה צריכה להוריד פעם אחת את המודלים לעברית. הם יישמרו במחשב שלך.</div>
-  <div id="setupPacks" style="margin:14px 0"></div>
-  <progress id="setupProg" value="0" max="1" style="width:100%;display:none"></progress>
-  <div class="status" id="setupStatus"></div>
-  <div class="row"><button class="btn" id="setupGo">הורד והתחל</button></div>
-</dialog>
-
-<!-- ================= הגדרות ================= -->
-<section id="settings">
-  <div class="card">
-    <h2>המחשב שלך</h2>
-    <div class="hw" id="hw"><span>סורק…</span></div>
-  </div>
-
-  <div class="card">
-    <h2>מודלים</h2>
-    <div class="sub">המודלים המומלצים נבחרו לפי הזיכרון והמעבד של המחשב הזה. מודלים שנבנו במקור לעברית קודמים.</div>
-    <div id="models"></div>
-    <div class="row">
-      <label>תמלול על</label>
-      <div class="seg" id="asrDev">
-        <button data-v="auto">אוטומטי</button><button data-v="gpu">מעבד גרפי</button><button data-v="cpu">מעבד רגיל</button>
-      </div>
-      <span class="status" id="modelStatus"></span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>חיפוש מודלים מתאימים</h2>
-    <div class="sub">מחפש ב־Hugging Face מודלים לעברית ומסמן מה מתאים לזיכרון של המחשב הזה. מודלים שנבנו במקור לעברית מופיעים ראשונים.</div>
-    <div class="row">
-      <select id="msTask">
-        <option value="text-to-speech">הקראה</option>
-        <option value="automatic-speech-recognition">תמלול</option>
-        <option value="text-generation">מודל שפה</option>
-        <option value="">הכל</option>
-      </select>
-      <input type="text" id="msQ" placeholder="מילת חיפוש (לא חובה)" style="width:200px">
-      <button class="btn" id="msGo">חפש</button>
-      <span class="status" id="msStatus"></span>
-    </div>
-    <div id="msResults" style="margin-top:10px"></div>
-  </div>
-
-  <div class="card">
-    <h2>כללי ועדכונים</h2>
-    <div class="setgrid">
-      <label>גרסה</label>
-      <div class="row" style="margin:0"><b id="appVer"></b>
-        <button class="btn sec" id="updCheck">חפש עדכון</button><span class="status" id="updStatus"></span></div>
-      <label>מאגר גיטהב לעדכונים</label>
-      <input type="text" id="appRepo" dir="ltr" placeholder="שם-משתמש/שם-מאגר">
-      <label>בדוק עדכון בפתיחה</label><label><input type="checkbox" id="appAuto"> כן</label>
-      <label>תיקיית שמירה</label><input type="text" id="appOut" dir="ltr" placeholder="ברירת מחדל: voice clone/output">
-      <label>ליבות לעיבוד</label>
-      <div class="row" style="margin:0"><input type="range" id="appThreads" min="0" max="16"><span id="appThreadsV"></span></div>
-      <label>אורך קובץ בייצוא</label>
-      <div class="row" style="margin:0"><input type="range" id="appPart" min="300" max="4000" step="100"><span id="appPartV"></span></div>
-      <label>משפטים מוכנים מראש בקורא</label>
-      <div class="row" style="margin:0"><input type="range" id="appPrefetch" min="1" max="6"><span id="appPrefetchV"></span></div>
-    </div>
-    <div id="updBox" class="reply" style="display:none"></div>
-    <div class="row"><button class="btn" id="appSave">שמור</button><span class="status" id="appStatus"></span></div>
-  </div>
-
-  <div class="card">
-    <h2>חיבור למודל שפה (API)</h2>
-    <div class="sub">לעיבוד טקסט: ניקוי תמלול, כתיבת תסריטים, סיכומים. מקומי (LM Studio, Ollama) או שירות חיצוני.</div>
-    <div class="setgrid" style="margin-top:12px">
-      <label>ספק</label><select id="llmProv"></select>
-      <label>כתובת שרת</label><input type="text" id="llmUrl" dir="ltr">
-      <label>מפתח API</label><input type="password" id="llmKey" dir="ltr" placeholder="לא נדרש לשרת מקומי" autocomplete="off">
-      <label>מודל</label>
-      <div class="row" style="margin:0"><input type="text" id="llmModel" dir="ltr" list="llmModels" style="flex:1;min-width:200px">
-        <datalist id="llmModels"></datalist><button class="btn sec" id="llmList">טען רשימת מודלים</button></div>
-    </div>
-    <div class="row">
-      <button class="btn sec" id="llmDetect">זהה שרתים מקומיים</button>
-      <button class="btn sec" id="llmTest">בדוק חיבור</button>
-      <button class="btn" id="llmSave">שמור</button>
-      <span class="status" id="llmStatus"></span>
-    </div>
-    <div id="llmReply" class="reply" style="display:none"></div>
-    <div class="hint" style="margin-top:8px">המפתח נשמר רק במחשב הזה, בקובץ ההגדרות של התוכנה, ונשלח רק לשרת שבחרת.</div>
-  </div>
-
-  <div class="card">
-    <h2>עיצוב וצבעים</h2>
-    <div class="setgrid">
-      <label>מצב תצוגה</label>
-      <div class="seg" id="thMode"><button data-v="auto">לפי המחשב</button><button data-v="light">בהיר</button><button data-v="dark">כהה</button></div>
-      <label>צבע ראשי</label>
-      <div class="swatches" id="thAccent"></div>
-      <label>גופן</label>
-      <select id="thFont">
-        <option value='"Assistant", "Heebo", -apple-system, "Segoe UI", Arial, sans-serif'>ברירת מחדל של המערכת</option>
-        <option value='"Arial Hebrew", Arial, sans-serif'>Arial Hebrew</option>
-        <option value='"Raanana", "Arial Hebrew", sans-serif'>רעננה</option>
-        <option value='"New Peninim MT", "Times New Roman", serif'>פנינים</option>
-        <option value='"Times New Roman", "David", serif'>Times (עם תגים)</option>
-      </select>
-      <label>גודל טקסט בעורכים</label><div class="row" style="margin:0"><input type="range" id="thSize" min="15" max="28"><span id="thSizeV"></span></div>
-      <label>עיגול פינות</label><input type="range" id="thRadius" min="0" max="24">
-      <label>טלפרומפטר</label>
-      <div class="row" style="margin:0">
-        <label>רקע</label><input type="color" id="thTpBg">
-        <label>טקסט</label><input type="color" id="thTpInk">
-        <label>השורה הנוכחית</label><input type="color" id="thTpNow">
-      </div>
-      <label>תצוגה מקדימה</label>
-      <div class="preview-tp"><div class="a">משפט שכבר הוקרא.</div><div class="b">זה המשפט שמוקרא עכשיו.</div><div class="c">והמשפט שיבוא אחריו.</div></div>
-    </div>
-    <div class="row">
-      <button class="btn" id="thSave">שמור עיצוב</button>
-      <button class="btn sec" id="thReset">חזור לברירת מחדל</button>
-      <span class="status" id="thStatus"></span>
     </div>
   </div>
 </section>
@@ -448,258 +393,474 @@
     <h2>תמלול סרטון או הקלטה</h2>
     <div class="row"><input type="file" id="asrFile" accept="audio/*,video/*"><button class="btn" id="doAsr">תמלל</button>
       <span class="status" id="asrStatus"></span></div>
-    <pre id="asrText"></pre>
+    <pre id="asrText" style="margin-top:14px"></pre>
     <div class="row"><a id="srtDl" download="ktuviot.srt" style="display:none">⬇ הורד כתוביות SRT</a>
       <button class="btn sec" id="toSpeak" style="display:none">העבר להקראה</button></div>
   </div>
 </section>
 
+<!-- ================= הגדרות ================= -->
+<section id="settings">
+  <div class="subnav"><div class="chips" id="setNav">
+    <button class="chip" data-go="setComputer">מחשב ומודלים</button>
+    <button class="chip" data-go="setWork">ביצועים ושמירה</button>
+    <button class="chip" data-go="setSearch">חיפוש מודלים</button>
+    <button class="chip" data-go="setLlm">מודל שפה</button>
+    <button class="chip" data-go="setLook">עיצוב</button>
+    <button class="chip" data-go="setUpdates">עדכונים</button>
+  </div></div>
+
+  <div class="card" id="setComputer">
+    <h2>המחשב שלך</h2>
+    <div class="hw" id="hw"><span>סורק…</span></div>
+    <h3>מודלים פעילים</h3>
+    <div class="sub">המומלצים נבחרו לפי הזיכרון של המחשב הזה. מודלים שנבנו במקור לעברית קודמים.</div>
+    <div id="models" style="margin-top:10px"></div>
+    <div class="row"><label>תמלול על</label>
+      <div class="chips" id="asrDev"><button class="chip" data-v="auto">אוטומטי</button><button class="chip" data-v="gpu">מעבד גרפי</button><button class="chip" data-v="cpu">מעבד רגיל</button></div>
+      <span class="status" id="modelStatus"></span></div>
+  </div>
+
+  <div class="card" id="setWork">
+    <h2>ביצועים ושמירה</h2>
+    <div class="sub">כל שינוי נשמר מיד. המספרים מבוססים על סריקת המחשב ועל קצב ההקראה שנמדד אצלך.</div>
+
+    <div class="setting">
+      <div class="setting-head"><b>תיקיית שמירה</b><span class="hint">לשם נשמרים קובצי הייצוא והסיפורים</span></div>
+      <div class="row" style="margin-top:0">
+        <div class="path" id="outPath" title=""></div>
+        <button class="btn" id="outPick">📁 בחר תיקייה…</button>
+        <button class="btn sec" id="outOpen">פתח</button>
+        <button class="btn sec" id="outReset">ברירת מחדל</button>
+      </div>
+    </div>
+
+    <div class="setting">
+      <div class="setting-head"><b>ליבות לעיבוד</b><span class="hint" id="coresHint"></span></div>
+      <div class="chips" id="threadChips"></div>
+      <div class="row">
+        <button class="btn sec small" id="benchGo">⚡ מדוד מהירות במחשב הזה</button>
+        <progress id="benchProg" value="0" max="1" style="display:none"></progress>
+        <span class="status" id="benchStatus"></span>
+      </div>
+    </div>
+
+    <div class="setting">
+      <div class="setting-head"><b>אורך כל קובץ בייצוא</b><span class="hint">קובץ ארוך = פחות קבצים</span></div>
+      <div class="range-row">
+        <input type="range" id="partRange" min="300" max="6000" step="100">
+        <div><div class="readout" id="partMain"></div><div class="hint" id="partSub"></div></div>
+      </div>
+      <div class="chips" id="partChips" style="margin-top:10px"></div>
+      <div class="hint" id="partDoc" style="margin-top:8px"></div>
+    </div>
+
+    <div class="setting">
+      <div class="setting-head"><b>משפטים מוכנים מראש בקורא</b><span class="hint">יותר = בלי הפסקות, קצת יותר עבודה ברקע</span></div>
+      <div class="chips" id="prefetchChips"></div>
+      <div class="hint" id="prefetchSub" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div class="card" id="setSearch">
+    <h2>חיפוש מודלים מתאימים</h2>
+    <div class="sub">מחפש ב־Hugging Face מודלים לעברית ומסמן מה מתאים לזיכרון של המחשב הזה.</div>
+    <div class="row">
+      <select id="msTask">
+        <option value="text-to-speech">הקראה</option>
+        <option value="automatic-speech-recognition">תמלול</option>
+        <option value="text-generation">מודל שפה</option>
+        <option value="">הכל</option>
+      </select>
+      <input type="text" id="msQ" placeholder="מילת חיפוש (לא חובה)" style="width:210px">
+      <button class="btn" id="msGo">חפש</button>
+      <span class="status" id="msStatus"></span>
+    </div>
+    <div id="msResults" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card" id="setLlm">
+    <h2>חיבור למודל שפה (API)</h2>
+    <div class="sub">לעיבוד טקסט: ניקוי תמלול, תסריטים, סיכומים. מקומי (LM Studio, Ollama) או שירות חיצוני.</div>
+    <div class="setgrid">
+      <label>ספק</label><select id="llmProv"></select>
+      <label>כתובת שרת</label><input type="text" id="llmUrl" dir="ltr">
+      <label>מפתח API</label><input type="password" id="llmKey" dir="ltr" placeholder="לא נדרש לשרת מקומי" autocomplete="off">
+      <label>מודל</label>
+      <div class="row" style="margin:0"><input type="text" id="llmModel" dir="ltr" list="llmModels" style="flex:1;min-width:200px">
+        <datalist id="llmModels"></datalist><button class="btn sec small" id="llmList">טען רשימה</button></div>
+    </div>
+    <div class="row">
+      <button class="btn sec" id="llmDetect">זהה שרתים מקומיים</button>
+      <button class="btn sec" id="llmTest">בדוק חיבור</button>
+      <button class="btn" id="llmSave">שמור</button>
+      <span class="status" id="llmStatus"></span>
+    </div>
+    <div id="llmReply" class="reply" style="display:none"></div>
+    <div class="hint" style="margin-top:10px">המפתח נשמר רק במחשב הזה, ונשלח רק לשרת שבחרת.</div>
+  </div>
+
+  <div class="card" id="setLook">
+    <h2>עיצוב וצבעים</h2>
+    <div class="setgrid">
+      <label>מצב תצוגה</label>
+      <div class="chips" id="thMode"><button class="chip" data-v="dark">כהה</button><button class="chip" data-v="light">בהיר</button><button class="chip" data-v="auto">לפי המחשב</button></div>
+      <label>צבעים</label>
+      <div class="swatches" id="thAccent"></div>
+      <label>צבע משלך</label>
+      <div class="row" style="margin:0"><input type="color" id="thC1" title="צבע ראשון"><input type="color" id="thC2" title="צבע שני"><span class="hint">שני צבעים למעבר</span></div>
+      <label>גופן</label>
+      <select id="thFont">
+        <option value="system">ברירת מחדל של המערכת</option>
+        <option value="arial">Arial Hebrew</option>
+        <option value="raanana">רעננה</option>
+        <option value="peninim">פנינים</option>
+        <option value="times">Times</option>
+      </select>
+      <label>גודל טקסט בעורכים</label>
+      <div class="range-row"><input type="range" id="thSize" min="15" max="28"><b id="thSizeV"></b></div>
+      <label>עיגול פינות</label><input type="range" id="thRadius" min="4" max="28">
+      <label>טלפרומפטר</label>
+      <div class="row" style="margin:0">
+        <label>רקע</label><input type="color" id="thTpBg">
+        <label>טקסט</label><input type="color" id="thTpInk">
+        <label>השורה הנוכחית</label><input type="color" id="thTpNow">
+      </div>
+      <label>תצוגה מקדימה</label>
+      <div class="preview-tp"><div class="a">משפט שכבר הוקרא.</div><div class="b">זה המשפט שמוקרא עכשיו.</div><div class="c">והמשפט שיבוא אחריו.</div></div>
+    </div>
+    <div class="row"><button class="btn sec" id="thReset">חזור לברירת מחדל</button><span class="hint">שינויי עיצוב נשמרים מיד</span></div>
+  </div>
+
+  <div class="card" id="setUpdates">
+    <h2>עדכונים</h2>
+    <div class="row" style="margin-top:8px">
+      <div><div class="hint">הגרסה שלך</div><div class="readout" id="appVer"></div></div>
+      <span class="spacer"></span>
+      <button class="btn" id="updCheck">חפש עדכון</button>
+    </div>
+    <div class="status" id="updStatus" style="margin-top:8px"></div>
+    <div id="updBox" class="reply" style="display:none"></div>
+    <div class="row"><label><input type="checkbox" id="appAuto"> בדוק עדכונים בכל פתיחה</label></div>
+    <details><summary>מתקדם</summary>
+      <div class="row"><label>מאגר גיטהב</label><input type="text" id="appRepo" dir="ltr" placeholder="שם-משתמש/kol-studio" style="width:260px"></div>
+    </details>
+  </div>
+</section>
+
 </main>
+
+<dialog id="setup">
+  <h2 style="margin-top:0">ברוך הבא לקול־סטודיו</h2>
+  <div class="sub">כדי לעבוד בלי אינטרנט, התוכנה מורידה פעם אחת את המודלים לעברית. הם נשמרים במחשב שלך.</div>
+  <div id="setupPacks" style="margin:16px 0"></div>
+  <progress id="setupProg" value="0" max="1" style="width:100%;display:none"></progress>
+  <div class="status" id="setupStatus"></div>
+  <div class="row"><button class="btn" id="setupGo">הורד והתחל</button></div>
+</dialog>
+<div class="toast" id="toast"></div>
+
 <script>
+/* ================= basics ================= */
 const $ = (id) => document.getElementById(id);
-document.getElementById("openBrowser").href = location.href;
+const el = (tag, cls = "", text = "") => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
 const setStatus = (id, msg, kind = "") => { const e = $(id); e.textContent = msg; e.className = "status " + kind; };
+const toast = (msg) => { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1600); };
+const fmtSec = (s) => s < 60 ? `${Math.round(s)} שניות` : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")} דקות`;
+const fmtNum = (n) => Number(n).toLocaleString("he-IL");
+$("openBrowser").href = location.href;
 
-document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("nav button, section, #gear").forEach(x => x.classList.remove("on"));
-  b.classList.add("on"); $(b.dataset.tab).classList.add("on");
-});
-$("gear").onclick = () => {
-  document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("on"));
-  $("gear").classList.add("on"); $("settings").classList.add("on"); loadSystem();
-};
-
-/* ---------- theme (applied before anything else, from the last saved copy) ---------- */
-const THEME_DEFAULT = { mode: "auto", accent: "#2f5bd3", tp_bg: "#0e0f13", tp_ink: "#8b8f9c", tp_now: "#ffd25e",
-  font: '"Assistant", "Heebo", -apple-system, "Segoe UI", Arial, sans-serif', radius: 12, text_size: 19 };
-const ACCENTS = ["#2f5bd3", "#6d4ad8", "#c2417a", "#d0452f", "#d07a12", "#1f8a5b", "#0f8a9d", "#4a5568"];
-let theme = { ...THEME_DEFAULT };
-
-function inkFor(hex) {  // readable text colour on top of the accent
-  const n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
-  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return lum > 0.6 ? "#111318" : "#ffffff";
+async function api(path, fields = {}, files = {}) {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+  Object.entries(files).forEach(([k, [blob, name]]) => fd.append(k, blob, name));
+  const r = await fetch(path, { method: "POST", body: fd });
+  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(m); }
+  return r;
 }
+const getJSON = async (path) => { const r = await fetch(path); const j = await r.json(); if (!r.ok) throw new Error(j.detail || r.statusText); return j; };
+
+/** Poll a background job until it ends. onTick(job) on every update; resolves with the final job or throws its error. */
+async function pollJob(id, onTick, every = 700) {
+  for (;;) {
+    const s = await getJSON(`/api/jobs/${id}`);
+    onTick?.(s);
+    if (s.state === "done") return s;
+    if (s.state === "error") throw new Error(s.error);
+    await new Promise(r => setTimeout(r, every));
+  }
+}
+
+/** Audio elements: release the previous recording from memory before showing a new one. */
+function setAudio(audio, blobOrUrl) {
+  if (audio._url) URL.revokeObjectURL(audio._url);
+  audio._url = blobOrUrl instanceof Blob ? URL.createObjectURL(blobOrUrl) : null;
+  audio.src = audio._url || blobOrUrl;
+  return audio.src;
+}
+
+function showTab(id) {
+  document.querySelectorAll("nav.tabs button, section").forEach(x => x.classList.remove("on"));
+  $("gear").classList.toggle("on", id === "settings");
+  document.querySelector(`nav.tabs button[data-tab="${id}"]`)?.classList.add("on");
+  $(id).classList.add("on");
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$("gear").onclick = () => { showTab("settings"); loadSystem(); };
+
+/* ================= theme ================= */
+const FONTS = {
+  system: '-apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif', arial: '"Arial Hebrew", Arial, sans-serif',
+  raanana: '"Raanana", "Arial Hebrew", sans-serif', peninim: '"New Peninim MT", "Times New Roman", serif',
+  times: '"Times New Roman", "David", serif',
+};
+const PALETTES = [["#ff4fa3", "#ff8a3d"], ["#7c5cff", "#22d3ee"], ["#3b82f6", "#06b6d4"], ["#f97316", "#facc15"],
+                  ["#10b981", "#84cc16"], ["#c084fc", "#f472b6"]];
+const THEME_DEFAULT = { mode: "dark", accent: "#ff4fa3", accent2: "#ff8a3d", tp_bg: "#0d0e22", tp_ink: "#8e90b5",
+                        tp_now: "#ffd25e", font: "system", radius: 18, text_size: 19 };
+let theme = { ...THEME_DEFAULT };
 
 function applyTheme(t) {
   const r = document.documentElement;
-  if (t.mode === "auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", t.mode);
-  r.style.setProperty("--accent", t.accent);
-  r.style.setProperty("--accent-ink", inkFor(t.accent));
-  r.style.setProperty("--stage", t.tp_bg);
-  r.style.setProperty("--stage-ink", t.tp_ink);
-  r.style.setProperty("--stage-now", t.tp_now);
-  r.style.setProperty("--font", t.font);
-  r.style.setProperty("--radius", t.radius + "px");
-  r.style.setProperty("--text-size", t.text_size + "px");
+  const dark = t.mode === "dark" || (t.mode === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  r.dataset.theme = dark ? "dark" : "light";
+  const vars = { "--accent": t.accent, "--accent2": t.accent2 || t.accent, "--stage": t.tp_bg, "--stage-ink": t.tp_ink,
+                 "--stage-now": t.tp_now, "--font": FONTS[t.font] || FONTS.system, "--radius": t.radius + "px",
+                 "--text-size": t.text_size + "px" };
+  Object.entries(vars).forEach(([k, v]) => r.style.setProperty(k, v));
   try { localStorage.setItem("theme", JSON.stringify(t)); } catch {}
 }
-try { const saved = JSON.parse(localStorage.getItem("theme") || "null"); if (saved) { theme = { ...THEME_DEFAULT, ...saved }; applyTheme(theme); } } catch {}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => theme.mode === "auto" && applyTheme(theme));
+try { const s = JSON.parse(localStorage.getItem("theme") || "null"); if (s) { theme = { ...THEME_DEFAULT, ...s }; } } catch {}
+applyTheme(theme);
 
-function fillThemeForm() {
-  document.querySelectorAll("#thMode button").forEach(b => b.classList.toggle("on", b.dataset.v === theme.mode));
-  const sw = $("thAccent"); sw.innerHTML = "";
-  ACCENTS.forEach(c => {
-    const s = document.createElement("button"); s.className = "swatch" + (c === theme.accent ? " sel" : "");
-    s.style.background = c; s.title = c; s.onclick = () => { theme.accent = c; applyTheme(theme); fillThemeForm(); }; sw.append(s);
-  });
-  const pick = document.createElement("input"); pick.type = "color"; pick.value = theme.accent; pick.title = "צבע משלך";
-  pick.oninput = () => { theme.accent = pick.value; applyTheme(theme); document.querySelectorAll(".swatch").forEach(x => x.classList.remove("sel")); };
-  sw.append(pick);
-  $("thFont").value = theme.font; $("thSize").value = theme.text_size; $("thSizeV").textContent = theme.text_size + "px";
-  $("thRadius").value = theme.radius; $("thTpBg").value = theme.tp_bg; $("thTpInk").value = theme.tp_ink; $("thTpNow").value = theme.tp_now;
+let themeSaveTimer = null;
+function themeChanged() {
+  applyTheme(theme); fillThemeForm();
+  clearTimeout(themeSaveTimer);
+  themeSaveTimer = setTimeout(() => api("/api/settings", { data: JSON.stringify({ theme }) }).then(() => toast("העיצוב נשמר ✓")), 500);
 }
-document.querySelectorAll("#thMode button").forEach(b => b.onclick = () => { theme.mode = b.dataset.v; applyTheme(theme); fillThemeForm(); });
-const bindTheme = (id, key, num = false) => $(id).oninput = () => {
-  theme[key] = num ? Number($(id).value) : $(id).value; applyTheme(theme);
-  if (key === "text_size") $("thSizeV").textContent = theme.text_size + "px";
-};
-bindTheme("thFont", "font"); bindTheme("thSize", "text_size", true); bindTheme("thRadius", "radius", true);
-bindTheme("thTpBg", "tp_bg"); bindTheme("thTpInk", "tp_ink"); bindTheme("thTpNow", "tp_now");
-$("thFont").onchange = $("thFont").oninput;
-$("thSave").onclick = async () => {
-  try { await api("/api/settings", { data: JSON.stringify({ theme }) }); setStatus("thStatus", "העיצוב נשמר", "ok"); }
-  catch (e) { setStatus("thStatus", e.message, "err"); }
-};
-$("thReset").onclick = () => { theme = { ...THEME_DEFAULT }; applyTheme(theme); fillThemeForm(); setStatus("thStatus", "לא נשמר עדיין — לחץ 'שמור עיצוב'", "warn"); };
+function fillThemeForm() {
+  document.querySelectorAll("#thMode .chip").forEach(b => b.classList.toggle("on", b.dataset.v === theme.mode));
+  const sw = $("thAccent"); sw.innerHTML = "";
+  PALETTES.forEach(([a, b]) => {
+    const s = el("button", "swatch" + (a === theme.accent && b === theme.accent2 ? " sel" : ""));
+    s.style.background = `linear-gradient(135deg, ${a}, ${b})`; s.title = `${a} → ${b}`;
+    s.onclick = () => { theme.accent = a; theme.accent2 = b; themeChanged(); }; sw.append(s);
+  });
+  $("thC1").value = theme.accent; $("thC2").value = theme.accent2 || theme.accent;
+  $("thFont").value = FONTS[theme.font] ? theme.font : "system";
+  $("thSize").value = theme.text_size; $("thSizeV").textContent = theme.text_size + "px"; $("thRadius").value = theme.radius;
+  $("thTpBg").value = theme.tp_bg; $("thTpInk").value = theme.tp_ink; $("thTpNow").value = theme.tp_now;
+}
+document.querySelectorAll("#thMode .chip").forEach(b => b.onclick = () => { theme.mode = b.dataset.v; themeChanged(); });
+[["thC1", "accent"], ["thC2", "accent2"], ["thFont", "font"], ["thSize", "text_size", true], ["thRadius", "radius", true],
+ ["thTpBg", "tp_bg"], ["thTpInk", "tp_ink"], ["thTpNow", "tp_now"]].forEach(([id, key, num]) => {
+  $(id).oninput = $(id).onchange = () => { theme[key] = num ? Number($(id).value) : $(id).value; themeChanged(); };
+});
+$("thReset").onclick = () => { theme = { ...THEME_DEFAULT }; themeChanged(); };
 
-/* ---------- settings: hardware + models ---------- */
-let SET = null, PROVIDERS = {};
-const CAT_NAMES = { tts: "הקראה ושכפול קול", nikud: "ניקוד", asr: "תמלול", llm: "מודל שפה (רץ ב־LM Studio / Ollama)" };
+/* ================= settings data ================= */
+let SET = null, PROVIDERS = {}, HW = null, META = {};
+const app = () => SET.app;
 
 async function loadSettings() {
-  const j = await (await fetch("/api/settings")).json();
-  SET = { ...j.settings, version: j.version }; PROVIDERS = j.providers;
-  fillAppForm();
-  if (SET.app.check_updates_on_start && SET.app.update_repo) checkUpdate(true);
+  const j = await getJSON("/api/settings");
+  SET = j.settings; PROVIDERS = j.providers; META = { version: j.version, output_default: j.output_default, output_dir: j.output_dir };
   theme = { ...THEME_DEFAULT, ...SET.theme }; applyTheme(theme); fillThemeForm();
-  const ps = $("llmProv"); ps.innerHTML = "";
-  Object.entries(PROVIDERS).forEach(([id, p]) => ps.add(new Option(p.name, id)));
-  ps.value = SET.llm.provider; $("llmUrl").value = SET.llm.base_url; $("llmKey").value = SET.llm.api_key; $("llmModel").value = SET.llm.model;
-  document.querySelectorAll("#asrDev button").forEach(b => b.classList.toggle("on", b.dataset.v === SET.models.asr_device));
+  fillUpdates(); fillLlm(); fillWork();
+  document.querySelectorAll("#asrDev .chip").forEach(b => b.classList.toggle("on", b.dataset.v === SET.models.asr_device));
+  if (app().check_updates_on_start && app().update_repo) checkUpdate(true);
 }
 
+/** Save one or more settings sections; returns the server's answer. */
+async function saveSettings(change, okMsg = "נשמר ✓") {
+  const j = await (await api("/api/settings", { data: JSON.stringify(change) })).json();
+  SET = j.settings; META.output_dir = j.output_dir;
+  toast(j.reloaded.length ? `${okMsg} · נטען מחדש: ${j.reloaded.join(", ")}` : okMsg);
+  return j;
+}
+
+document.querySelectorAll("#setNav .chip").forEach(b => b.onclick = () => $(b.dataset.go).scrollIntoView({ behavior: "smooth", block: "start" }));
+
+/* --- computer + models --- */
+const CAT_NAMES = { tts: "הקראה ושכפול קול", nikud: "ניקוד", asr: "תמלול", llm: "מודל שפה (רץ ב־LM Studio / Ollama)" };
+
 async function loadSystem() {
-  const j = await (await fetch("/api/system")).json(), hw = j.hardware;
-  const chips = [
-    ["מחשב", `${hw.cpu}`], ["זיכרון", `${hw.ram_gb}GB`], ["ליבות", hw.cores],
-    hw.gpu ? ["מעבד גרפי", `${hw.gpu}${hw.gpu_cores ? " · " + hw.gpu_cores + " ליבות" : ""}`] : null,
-    ["האצה", hw.accelerators.join(", ") || "—"], ["מערכת", hw.os], ["מקום פנוי", `${hw.disk_free_gb}GB`],
-    ["רמת המחשב", hw.tier_name],
-  ].filter(Boolean);
+  const j = await getJSON("/api/system"); HW = j.hardware;
+  const chips = [["מחשב", HW.cpu], ["זיכרון", `${HW.ram_gb}GB`], ["ליבות", HW.cores],
+    HW.gpu ? ["מעבד גרפי", HW.gpu + (HW.gpu_cores ? ` · ${HW.gpu_cores} ליבות` : "")] : null,
+    ["האצה", HW.accelerators.join(", ") || "—"], ["מערכת", HW.os], ["מקום פנוי", `${HW.disk_free_gb}GB`], ["רמה", HW.tier_name]].filter(Boolean);
   $("hw").innerHTML = "";
-  chips.forEach(([k, v]) => { const s = document.createElement("span"); s.innerHTML = `${k}: <b></b>`; s.querySelector("b").textContent = v; $("hw").append(s); });
+  chips.forEach(([k, v]) => { const s = el("span", "", `${k}: `); s.append(el("b", "", String(v))); $("hw").append(s); });
 
   const box = $("models"); box.innerHTML = "";
   for (const cat of ["tts", "nikud", "asr", "llm"]) {
     const items = j.models.filter(m => m.category === cat); if (!items.length) continue;
-    const sec = document.createElement("div"); sec.className = "mcat";
-    sec.innerHTML = `<h3>${CAT_NAMES[cat]}</h3>`;
-    items.forEach(m => {
-      const row = document.createElement("div");
-      row.className = "mrow" + (m.active ? " active" : "") + (!m.available || !m.fits ? " off" : "");
-      const mn = document.createElement("div"); mn.className = "mn";
-      mn.textContent = m.name; const sm = document.createElement("small"); sm.textContent = `${m.size} · ${m.note}`; mn.append(sm);
-      row.append(mn);
-      const badge = (txt, cls = "") => { const b = document.createElement("span"); b.className = "badge " + cls; b.textContent = txt; row.append(b); };
-      if (m.recommended) badge("מומלץ למחשב שלך", "rec");
-      if (!m.fits) badge(`דורש ${m.min_ram}GB זיכרון`, "no");
-      if (!m.available) badge("בקרוב");
-      else if (m.installed === false) {
-        const b = document.createElement("button"); b.className = "btn sec"; b.textContent = `הורד (${m.size})`;
-        b.onclick = () => downloadModel(m, b); row.append(b);
-      } else if (m.setting) {
-        const b = document.createElement("button"); b.className = "btn" + (m.active ? "" : " sec");
-        b.textContent = m.active ? "פעיל ✓" : "בחר"; b.disabled = m.active;
-        b.onclick = () => saveModels({ [m.setting]: m.value }); row.append(b);
-      } else if (cat === "llm") badge("הורדה דרך LM Studio");
-      sec.append(row);
-    });
-    box.append(sec);
+    box.append(el("h3", "", CAT_NAMES[cat]));
+    items.forEach(m => box.append(modelRow(m)));
   }
+  fillWork();
 }
 
-async function saveModels(change) {
-  setStatus("modelStatus", "טוען את המודל…");
-  try {
-    const j = await (await api("/api/settings", { data: JSON.stringify({ models: change }) })).json();
-    SET = j.settings;
-    setStatus("modelStatus", j.reloaded.length ? `הוחלף: ${j.reloaded.join(", ")}` : "נשמר", "ok");
-    loadSystem();
-  } catch (e) { setStatus("modelStatus", e.message, "err"); }
+function modelRow(m) {
+  const row = el("div", "mrow" + (m.active ? " active" : "") + (!m.available || !m.fits ? " off" : ""));
+  const mn = el("div", "mn", m.name); mn.append(el("small", "", `${m.size} · ${m.note}`)); row.append(mn);
+  if (m.recommended) row.append(el("span", "badge ok", "מומלץ למחשב שלך"));
+  if (!m.fits) row.append(el("span", "badge warn", `דורש ${m.min_ram}GB זיכרון`));
+  if (!m.available) row.append(el("span", "badge", "בקרוב"));
+  else if (m.pack && !m.installed) {
+    const b = el("button", "btn sec small", `הורד (${m.size})`); b.onclick = () => downloadPack(m.pack, b); row.append(b);
+  } else if (m.setting) {
+    const b = el("button", "btn small" + (m.active ? "" : " sec"), m.active ? "פעיל ✓" : "בחר"); b.disabled = m.active;
+    b.onclick = async () => { b.disabled = true; try { await saveSettings({ models: { [m.setting]: m.value } }); loadSystem(); } catch (e) { setStatus("modelStatus", e.message, "err"); } };
+    row.append(b);
+  } else if (m.category === "llm") row.append(el("span", "badge", "הורדה דרך LM Studio"));
+  return row;
 }
-document.querySelectorAll("#asrDev button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("#asrDev button").forEach(x => x.classList.toggle("on", x === b)); saveModels({ asr_device: b.dataset.v });
+
+async function downloadPack(pack, btn) {
+  btn.disabled = true;
+  try {
+    const { job } = await (await api("/api/models/download", { packs: pack })).json();
+    await pollJob(job, s => btn.textContent = `${Math.round(100 * s.done / Math.max(1, s.total))}%`, 1500);
+    toast("ההורדה הסתיימה ✓"); loadSystem();
+  } catch (e) { btn.disabled = false; btn.textContent = "נסה שוב"; setStatus("modelStatus", e.message, "err"); }
+}
+document.querySelectorAll("#asrDev .chip").forEach(b => b.onclick = async () => {
+  document.querySelectorAll("#asrDev .chip").forEach(x => x.classList.toggle("on", x === b));
+  await saveSettings({ models: { asr_device: b.dataset.v } });
 });
 
-async function downloadModel(m, btn) {
-  btn.disabled = true; btn.textContent = "מוריד…";
-  try {
-    const j = await (await api("/api/models/download", { model: m.id })).json();
-    const poll = async () => {
-      const s = await (await fetch(`/api/jobs/${j.job}`)).json();
-      if (s.state === "running") return setTimeout(poll, 2000);
-      if (s.state === "error") { btn.textContent = "נכשל"; setStatus("modelStatus", s.error, "err"); return; }
-      setStatus("modelStatus", `${m.name} הורד`, "ok"); loadSystem();
-    };
-    poll();
-  } catch (e) { btn.disabled = false; btn.textContent = "הורד"; setStatus("modelStatus", e.message, "err"); }
+/* --- performance & saving --- */
+function fillWork() {
+  if (!SET) return;
+  $("outPath").textContent = META.output_dir; $("outPath").title = META.output_dir;
+  $("outReset").disabled = !app().output_dir;
+
+  const cores = HW?.cores || 8, auto = HW?.default_threads || Math.min(8, cores);
+  $("coresHint").textContent = HW ? `במחשב שלך ${cores} ליבות · אוטומטי משתמש ב־${auto}` : "";
+  const counts = [...new Set([1, 2, 4, 6, 8, cores].filter(n => n <= cores))].sort((a, b) => a - b);
+  const bench = Object.fromEntries((window.BENCH || []).map(r => [r.threads, r.x_realtime]));
+  const tc = $("threadChips"); tc.innerHTML = "";
+  [[0, `אוטומטי (${auto})`], ...counts.map(n => [n, String(n)])].forEach(([n, label]) => {
+    const b = el("button", "chip" + (Number(app().threads) === n ? " on" : ""), label);
+    if (bench[n || auto]) b.append(el("small", "", ` · פי ${bench[n || auto]}`));
+    b.onclick = async () => { await saveSettings({ app: { threads: n } }); fillWork(); };
+    tc.append(b);
+  });
+
+  $("partRange").value = app().part_chars; showPart();
+  const pc = $("prefetchChips"); pc.innerHTML = "";
+  for (let n = 1; n <= 6; n++) {
+    const b = el("button", "chip" + (app().reader_prefetch === n ? " on" : ""), `${n} ${n === 1 ? "משפט" : "משפטים"}`);
+    b.onclick = async () => { await saveSettings({ app: { reader_prefetch: n } }); fillWork(); };
+    pc.append(b);
+  }
+  $("prefetchSub").textContent = `≈ ${fmtSec(app().reader_prefetch * SET.stats.sentence_sec)} הקראה מוכנים מראש (משפט ממוצע אצלך: ${SET.stats.sentence_sec.toFixed(1)} שניות)`;
 }
 
-/* ---------- settings: general + updates ---------- */
-function fillAppForm() {
-  const a = SET.app;
-  $("appVer").textContent = SET.version || "";
-  $("appRepo").value = a.update_repo; $("appAuto").checked = a.check_updates_on_start; $("appOut").value = a.output_dir;
-  $("appThreads").value = a.threads; $("appPart").value = a.part_chars; $("appPrefetch").value = a.reader_prefetch;
-  showAppVals();
+const partSeconds = (chars) => chars / 1.18 / SET.stats.chars_per_sec;  // limit counts spaces too; the rate counts letters
+function showPart() {
+  const chars = Number($("partRange").value);
+  $("partMain").textContent = `${fmtNum(chars)} תווים`;
+  $("partSub").textContent = `≈ ${fmtSec(partSeconds(chars))} הקראה לקובץ · כ־${fmtNum(Math.round(chars / 5.6))} מילים`;
+  const pc = $("partChips"); pc.innerHTML = "";
+  [[30, "קצר"], [90, "בינוני"], [300, "ארוך"], [600, "ארוך מאוד"]].forEach(([sec, name]) => {
+    const c = Math.min(6000, Math.max(300, Math.round(sec * SET.stats.chars_per_sec * 1.18 / 100) * 100));
+    const b = el("button", "chip" + (c === chars ? " on" : ""), name); b.append(el("small", "", ` · ${fmtSec(sec)}`));
+    b.onclick = () => { $("partRange").value = c; showPart(); savePart(); }; pc.append(b);
+  });
+  estimateDoc(chars);
 }
-function showAppVals() {
-  $("appThreadsV").textContent = Number($("appThreads").value) ? $("appThreads").value : "אוטומטי";
-  $("appPartV").textContent = `${$("appPart").value} תווים`;
-  $("appPrefetchV").textContent = $("appPrefetch").value;
+let partTimer = null, docTimer = null;
+const savePart = () => { clearTimeout(partTimer); partTimer = setTimeout(() => saveSettings({ app: { part_chars: Number($("partRange").value) } }), 400); };
+$("partRange").oninput = () => { showPart(); savePart(); };
+
+function estimateDoc(chars = app().part_chars) {  // how the text on the speak page would be split
+  clearTimeout(docTimer);
+  docTimer = setTimeout(async () => {
+    const text = ($("pointed").value.trim() || $("plain").value.trim());
+    if (!text || !SET) { $("partDoc").textContent = ""; $("expEstimate").textContent = ""; return; }
+    try {
+      const j = await (await api("/api/split", { text, max_chars: chars })).json();
+      const total = text.replace(/[֑-ׇ]/g, "").length;
+      const msg = `הטקסט בעמוד ההקראה (${fmtNum(total)} תווים) יתחלק ל־${j.parts.length} ${j.parts.length === 1 ? "קובץ" : "קבצים"}, כ־${fmtSec(partSeconds(total))} הקראה בסך הכל.`;
+      $("partDoc").textContent = msg; $("expEstimate").textContent = msg;
+    } catch {}
+  }, 350);
 }
-["appThreads", "appPart", "appPrefetch"].forEach(id => $(id).oninput = showAppVals);
-$("appSave").onclick = async () => {
-  const app = { update_repo: $("appRepo").value.trim(), check_updates_on_start: $("appAuto").checked,
-    output_dir: $("appOut").value.trim(), threads: Number($("appThreads").value), part_chars: Number($("appPart").value),
-    reader_prefetch: Number($("appPrefetch").value) };
-  setStatus("appStatus", "שומר…");
+
+$("outPick").onclick = async () => {
+  $("outPick").disabled = true;
   try {
-    const j = await (await api("/api/settings", { data: JSON.stringify({ app }) })).json();
-    SET = { ...j.settings, version: SET.version };
-    setStatus("appStatus", j.reloaded.length ? `נשמר · הוחלף: ${j.reloaded.join(", ")}` : "נשמר", "ok");
-  } catch (e) { setStatus("appStatus", e.message, "err"); }
+    const { path } = await (await api("/api/pick-folder")).json();
+    if (path) { await saveSettings({ app: { output_dir: path } }, "התיקייה נשמרה ✓"); fillWork(); }
+  } catch (e) { toast(e.message); } finally { $("outPick").disabled = false; }
+};
+$("outOpen").onclick = () => api("/api/reveal", { path: META.output_dir }).catch(e => toast(e.message));
+$("outReset").onclick = async () => { await saveSettings({ app: { output_dir: "" } }, "חזרה לתיקיית ברירת המחדל ✓"); fillWork(); };
+
+$("benchGo").onclick = async () => {
+  $("benchGo").disabled = true; $("benchProg").style.display = ""; setStatus("benchStatus", "מודד… (כחצי דקה)");
+  try {
+    const { job } = await (await api("/api/benchmark")).json();
+    const s = await pollJob(job, s => { $("benchProg").max = s.total; $("benchProg").value = s.done; setStatus("benchStatus", `מודד עם ${s.current}…`); }, 800);
+    window.BENCH = s.results;
+    const best = s.results.find(r => r.threads === s.best);
+    setStatus("benchStatus", `הכי מהיר: ${s.best} ליבות (פי ${best.x_realtime} מזמן אמת)`, "ok");
+    fillWork();
+    if (Number(app().threads) !== s.best && confirm(`להשתמש ב־${s.best} ליבות?`)) { await saveSettings({ app: { threads: s.best } }); fillWork(); }
+  } catch (e) { setStatus("benchStatus", e.message, "err"); }
+  finally { $("benchGo").disabled = false; $("benchProg").style.display = "none"; }
 };
 
-async function checkUpdate(quiet = false) {
-  if (!quiet) setStatus("updStatus", "בודק…");
-  try {
-    const r = await fetch("/api/update/check"); const j = await r.json();
-    if (!r.ok) throw new Error(j.detail || r.statusText);
-    if (quiet) { if (j.status === "update") { $("gear").textContent = "⚙ הגדרות • עדכון זמין"; } return; }
-    setStatus("updStatus", j.message, j.status === "update" ? "warn" : j.status === "latest" ? "ok" : "");
-    const box = $("updBox");
-    if (j.status === "update") {
-      box.style.display = ""; box.innerHTML = "";
-      const h = document.createElement("b"); h.textContent = `גרסה ${j.latest}`; box.append(h);
-      const notes = document.createElement("div"); notes.style.whiteSpace = "pre-wrap"; notes.textContent = j.notes; box.append(notes);
-      j.assets.forEach(a => { const l = document.createElement("a"); l.href = a.url; l.target = "_blank"; l.rel = "noopener";
-        l.textContent = `⬇ ${a.name} (${a.size_mb}MB)`; l.style.display = "block"; box.append(l); });
-      const pg = document.createElement("a"); pg.href = j.url; pg.target = "_blank"; pg.rel = "noopener"; pg.textContent = "דף הגרסה בגיטהב"; box.append(pg);
-    } else box.style.display = "none";
-  } catch (e) { if (!quiet) setStatus("updStatus", e.message, "err"); }
-}
-$("updCheck").onclick = () => checkUpdate(false);
-
-/* ---------- settings: model search ---------- */
+/* --- model search --- */
 $("msGo").onclick = async () => {
   $("msGo").disabled = true; setStatus("msStatus", "מחפש ב־Hugging Face…"); $("msResults").innerHTML = "";
   try {
-    const j = await (await fetch(`/api/models/search?task=${encodeURIComponent($("msTask").value)}&q=${encodeURIComponent($("msQ").value.trim())}`)).json();
-    if (!j.results.length) { setStatus("msStatus", "לא נמצאו מודלים", "warn"); return; }
-    setStatus("msStatus", `${j.results.length} תוצאות`, "ok");
+    const j = await getJSON(`/api/models/search?task=${encodeURIComponent($("msTask").value)}&q=${encodeURIComponent($("msQ").value.trim())}`);
+    setStatus("msStatus", j.results.length ? `${j.results.length} תוצאות` : "לא נמצאו מודלים", j.results.length ? "ok" : "warn");
     j.results.forEach(m => {
-      const row = document.createElement("div"); row.className = "mrow" + (m.fits === false ? " off" : "");
-      const mn = document.createElement("div"); mn.className = "mn";
-      const a = document.createElement("a"); a.href = m.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = m.id; a.dir = "ltr";
-      mn.append(a);
-      const sm = document.createElement("small");
-      sm.textContent = [m.task, m.size_gb ? `~${m.size_gb}GB` : "גודל לא ידוע", `${m.downloads.toLocaleString()} הורדות`, `עודכן ${m.updated}`].filter(Boolean).join(" · ");
-      mn.append(sm); row.append(mn);
-      const badge = (txt, cls = "") => { const b = document.createElement("span"); b.className = "badge " + cls; b.textContent = txt; row.append(b); };
-      if (m.native) badge("עברית במקור", "rec");
-      if (m.fits === true) badge("מתאים למחשב", "rec"); else if (m.fits === false) badge("גדול מדי", "no");
-      if (m.gguf) badge("GGUF · ל־LM Studio");
+      const row = el("div", "mrow" + (m.fits === false ? " off" : "")), mn = el("div", "mn");
+      const a = el("a", "", m.id); a.href = m.url; a.target = "_blank"; a.rel = "noopener"; a.dir = "ltr"; mn.append(a);
+      mn.append(el("small", "", [m.task, m.size_gb ? `~${m.size_gb}GB` : "גודל לא ידוע", `${fmtNum(m.downloads)} הורדות`, `עודכן ${m.updated}`].filter(Boolean).join(" · ")));
+      row.append(mn);
+      if (m.native) row.append(el("span", "badge ok", "עברית במקור"));
+      if (m.fits === true) row.append(el("span", "badge ok", "מתאים למחשב")); else if (m.fits === false) row.append(el("span", "badge warn", "גדול מדי"));
+      if (m.gguf) row.append(el("span", "badge", "GGUF · ל־LM Studio"));
       $("msResults").append(row);
     });
   } catch (e) { setStatus("msStatus", e.message, "err"); } finally { $("msGo").disabled = false; }
 };
 
-/* ---------- settings: external LLM ---------- */
+/* --- LLM --- */
+function fillLlm() {
+  const ps = $("llmProv"); ps.innerHTML = "";
+  Object.entries(PROVIDERS).forEach(([id, p]) => ps.add(new Option(p.name, id)));
+  ps.value = SET.llm.provider; $("llmUrl").value = SET.llm.base_url; $("llmKey").value = SET.llm.api_key; $("llmModel").value = SET.llm.model;
+}
 $("llmProv").onchange = () => {
   const p = PROVIDERS[$("llmProv").value];
   $("llmUrl").value = p.base_url; $("llmKey").value = ""; $("llmModel").value = "";
   $("llmKey").placeholder = p.key ? "הדבק כאן את המפתח" : "לא נדרש לשרת מקומי";
 };
 const llmFields = () => ({ provider: $("llmProv").value, base_url: $("llmUrl").value.trim(), api_key: $("llmKey").value.trim() });
-
+const fillModelList = (models) => { $("llmModels").innerHTML = ""; models.forEach(m => $("llmModels").append(new Option(m, m))); };
 $("llmList").onclick = async () => {
   setStatus("llmStatus", "טוען מודלים…");
   try {
-    const j = await (await api("/api/llm/models", llmFields())).json();
-    $("llmModels").innerHTML = ""; j.models.forEach(m => $("llmModels").append(new Option(m, m)));
+    const j = await (await api("/api/llm/models", llmFields())).json(); fillModelList(j.models);
     if (!$("llmModel").value && j.models.length) $("llmModel").value = j.models.find(m => !/embed/i.test(m)) || j.models[0];
     setStatus("llmStatus", `נמצאו ${j.models.length} מודלים`, "ok");
   } catch (e) { setStatus("llmStatus", e.message, "err"); }
 };
 $("llmDetect").onclick = async () => {
   setStatus("llmStatus", "מחפש שרתים במחשב…");
-  const j = await (await fetch("/api/llm/detect")).json();
+  const j = await getJSON("/api/llm/detect");
   if (!j.found.length) return setStatus("llmStatus", "לא נמצא LM Studio או Ollama פועל. הפעל אחד מהם ונסה שוב", "warn");
   const f = j.found[0];
-  $("llmProv").value = f.provider; $("llmUrl").value = PROVIDERS[f.provider].base_url; $("llmKey").value = "";
-  $("llmModels").innerHTML = ""; f.models.forEach(m => $("llmModels").append(new Option(m, m)));
+  $("llmProv").value = f.provider; $("llmUrl").value = PROVIDERS[f.provider].base_url; $("llmKey").value = ""; fillModelList(f.models);
   $("llmModel").value = f.models.find(m => /dicta|hebrew|heb/i.test(m)) || f.models.find(m => !/embed/i.test(m)) || "";
   setStatus("llmStatus", `נמצא ${f.name} עם ${f.models.length} מודלים`, "ok");
 };
@@ -713,76 +874,90 @@ $("llmTest").onclick = async () => {
   } catch (e) { setStatus("llmStatus", e.message, "err"); } finally { $("llmTest").disabled = false; }
 };
 $("llmSave").onclick = async () => {
-  try {
-    const j = await (await api("/api/settings", { data: JSON.stringify({ llm: { ...llmFields(), model: $("llmModel").value.trim() } }) })).json();
-    SET = j.settings; $("llmKey").value = SET.llm.api_key; setStatus("llmStatus", "נשמר", "ok");
-  } catch (e) { setStatus("llmStatus", e.message, "err"); }
+  try { await saveSettings({ llm: { ...llmFields(), model: $("llmModel").value.trim() } }); $("llmKey").value = SET.llm.api_key; setStatus("llmStatus", "נשמר", "ok"); }
+  catch (e) { setStatus("llmStatus", e.message, "err"); }
 };
 
-async function api(path, fields = {}, files = {}) {
-  const fd = new FormData();
-  Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
-  Object.entries(files).forEach(([k, [blob, name]]) => fd.append(k, blob, name));
-  const r = await fetch(path, { method: "POST", body: fd });
-  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch {} throw new Error(m); }
-  return r;
+/* --- updates --- */
+function fillUpdates() {
+  $("appVer").textContent = META.version; $("appAuto").checked = app().check_updates_on_start; $("appRepo").value = app().update_repo;
 }
+$("appAuto").onchange = () => saveSettings({ app: { check_updates_on_start: $("appAuto").checked } });
+$("appRepo").onchange = () => saveSettings({ app: { update_repo: $("appRepo").value.trim() } });
 
-/* ---------- characters ---------- */
+async function checkUpdate(quiet = false) {
+  if (!quiet) setStatus("updStatus", "בודק…");
+  try {
+    const j = await getJSON("/api/update/check");
+    $("gear").classList.toggle("has-update", j.status === "update");
+    if (quiet) return;
+    setStatus("updStatus", j.message, j.status === "update" ? "warn" : j.status === "latest" ? "ok" : "");
+    const box = $("updBox"); box.style.display = j.status === "update" ? "" : "none"; box.innerHTML = "";
+    if (j.status !== "update") return;
+    box.append(el("b", "", `גרסה ${j.latest}`));
+    const notes = el("div", "", j.notes); notes.style.whiteSpace = "pre-wrap"; box.append(notes);
+    const link = (href, text) => { const a = el("a", "", text); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.style.display = "block"; box.append(a); };
+    j.assets.forEach(a => link(a.url, `⬇ ${a.name} (${a.size_mb}MB)`));
+    link(j.url, "דף הגרסה בגיטהב");
+  } catch (e) { if (!quiet) setStatus("updStatus", e.message, "err"); }
+}
+$("updCheck").onclick = () => checkUpdate(false);
+
+/* ================= characters ================= */
+let CHARS = [];
+const avatarColor = (name) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360; return `linear-gradient(135deg, hsl(${h} 80% 60%), hsl(${(h + 40) % 360} 85% 55%))`; };
+
 async function loadChars() {
-  const list = await (await fetch("/api/characters")).json();
+  CHARS = await getJSON("/api/characters");
   for (const sel of ["voice", "mixA", "mixB", "tpVoice"]) {
     const s = $(sel), keep = s.value; s.innerHTML = "";
-    for (const c of list) s.add(new Option(`${c.name} · ${c.source}`, c.id));
+    CHARS.forEach(c => s.add(new Option(`${c.name} · ${c.source}`, c.id)));
     if (keep) s.value = keep;
   }
   if (!$("mixB").dataset.init) { $("mixB").value = "adam"; $("mixB").dataset.init = 1; }
-  $("charGrid").innerHTML = "";
-  for (const c of list) {
-    const d = document.createElement("div"); d.className = "char";
-    const extra = [c.ref_seconds ? `${c.ref_seconds} שניות דיבור` : "", c.quality != null ? `התאמה לתמלול ${Math.round(c.quality * 100)}%` : ""]
-      .filter(Boolean).join(" · ");
-    d.innerHTML = `<b></b><small class="src"></small><small class="ex"></small><small class="nt" style="color:var(--warn)"></small>
-      <div class="acts"><button class="btn sec play">שמע דוגמה</button></div>`;
-    d.querySelector("b").textContent = c.name;
-    d.querySelector(".src").textContent = c.source;
-    d.querySelector(".ex").textContent = extra;
-    d.querySelector(".nt").textContent = (c.notes || []).join(" · ");
-    d.querySelector(".play").onclick = (e) => sample(c.id, e.target);
+  const grid = $("charGrid"); grid.innerHTML = "";
+  CHARS.forEach(c => {
+    const d = el("div", "char"), av = el("div", "av", c.name.slice(0, 1)); av.style.background = avatarColor(c.name);
+    d.append(av, el("b", "", c.name), el("small", "", c.source));
+    const extra = [c.ref_seconds ? `${c.ref_seconds} שניות דיבור` : "", c.quality != null ? `התאמה לתמלול ${Math.round(c.quality * 100)}%` : ""].filter(Boolean).join(" · ");
+    if (extra) d.append(el("small", "", extra));
+    if (c.notes?.length) { const n = el("small", "", c.notes.join(" · ")); n.style.color = "var(--warn)"; d.append(n); }
+    const acts = el("div", "acts"), play = el("button", "btn sec small", "▶ דוגמה");
+    play.onclick = () => sample(c.id, play); acts.append(play);
     if (c.source !== "קול מובנה") {
-      const del = document.createElement("button"); del.className = "btn sec"; del.textContent = "מחק";
+      const del = el("button", "btn sec small", "מחק");
       del.onclick = async () => {
-        if (!confirm(`למחוק את הדמות "${c.name}"? (היא תועבר לתיקיית characters_deleted ואפשר לשחזר)`)) return;
+        if (!confirm(`למחוק את הדמות "${c.name}"? היא תועבר לתיקיית characters_deleted ואפשר לשחזר.`)) return;
         await fetch(`/api/characters/${c.id}`, { method: "DELETE" }); loadChars();
       };
-      d.querySelector(".acts").append(del);
+      acts.append(del);
     }
-    $("charGrid").append(d);
-  }
-  stChars = list; if (stSpeakers.length) renderCast();  // new clones/mixes show up in the story cast
+    d.append(acts); grid.append(d);
+  });
+  if (stSpeakers.length) renderCast();  // new clones/mixes show up in the story cast
 }
 
+const sampleAudio = new Audio();
 async function sample(id, btn) {
   btn.disabled = true;
   try {
     const r = await api("/api/speak", { text: "שָׁלוֹם, זוֹ דֻּגְמָה קְצָרָה שֶׁל הַקּוֹל שֶׁלִּי.", character: id });
-    new Audio(URL.createObjectURL(await r.blob())).play();
-  } catch (e) { alert(e.message); } finally { btn.disabled = false; }
+    setAudio(sampleAudio, await r.blob()); sampleAudio.play();
+  } catch (e) { toast(e.message); } finally { btn.disabled = false; }
 }
 
-/* ---------- speak page ---------- */
-async function extractFile(file) {
-  return (await api("/api/extract", {}, { file: [file, file.name] })).json();
-}
+/* ================= speak page ================= */
+const extractFile = async (file) => (await api("/api/extract", {}, { file: [file, file.name] })).json();
+const speakText = () => ($("pointed").value.trim() || $("plain").value.trim());
+["plain", "pointed"].forEach(id => $(id).addEventListener("input", () => estimateDoc()));
 
 $("loadDoc").onclick = async () => {
   const f = $("docFile").files[0]; if (!f) return setStatus("docStatus", "בחר קובץ", "err");
   setStatus("docStatus", "קורא את הקובץ…");
   try {
     const j = await extractFile(f);
-    $("plain").value = j.text; $("pointed").value = ""; $("expTitle").value = j.title;
-    const n = j.parts.reduce((a, p) => a + p.sentences.length, 0);
-    setStatus("docStatus", `${j.parts.length} חלקים · ${n} משפטים`, "ok");
+    $("plain").value = j.text; $("pointed").value = ""; $("expTitle").value = j.title; estimateDoc();
+    setStatus("docStatus", `${j.parts.length} חלקים · ${j.parts.reduce((a, p) => a + p.sentences.length, 0)} משפטים`, "ok");
   } catch (e) { setStatus("docStatus", e.message, "err"); }
 };
 
@@ -794,55 +969,43 @@ $("doNikud").onclick = async () => {
   } catch (e) { setStatus("nikudStatus", e.message, "err"); } finally { $("doNikud").disabled = false; }
 };
 
-const speakText = () => ($("pointed").value.trim() || $("plain").value.trim());
-
 $("doSpeak").onclick = async () => {
   const text = speakText().split("\n").filter(l => !l.trim().startsWith("# ")).join("\n");
   if (text.length > 3000 && !confirm("הטקסט ארוך. לייצוא מסמך שלם עדיף 'צור תיקייה'. להקריא בכל זאת?")) return;
   $("doSpeak").disabled = true; setStatus("speakStatus", "מקריא…");
   try {
     const r = await api("/api/speak", { text, character: $("voice").value, speed: $("speed").value, auto_nikud: true });
-    const url = URL.createObjectURL(await r.blob());
-    $("player").src = url; $("player").play(); $("dl").href = url; $("dl").style.display = "";
+    $("dl").href = setAudio($("player"), await r.blob()); $("player").play(); $("dl").style.display = "";
     setStatus("speakStatus", `${r.headers.get("X-Audio-Seconds")} שניות שמע ב־${r.headers.get("X-Synth-Seconds")} שניות`, "ok");
   } catch (e) { setStatus("speakStatus", e.message, "err"); } finally { $("doSpeak").disabled = false; }
 };
 
 $("doExport").onclick = async () => {
-  $("doExport").disabled = true; $("expOpen").style.display = "none";
+  $("doExport").disabled = true; $("expOpen").style.display = "none"; $("expProg").style.display = "";
   try {
-    const j = await (await api("/api/export", { text: speakText(), title: $("expTitle").value, character: $("voice").value, speed: $("speed").value })).json();
-    $("expProg").style.display = ""; $("expProg").max = j.total;
-    const poll = async () => {
-      const s = await (await fetch(`/api/jobs/${j.job}`)).json();
-      $("expProg").value = s.done;
-      if (s.state === "running") { setStatus("expStatus", `${s.done}/${s.total} · ${s.current}`); return setTimeout(poll, 700); }
-      $("doExport").disabled = false;
-      if (s.state === "error") return setStatus("expStatus", s.error, "err");
-      setStatus("expStatus", `נוצרו ${s.total} קבצים`, "ok");
-      $("expOpen").style.display = ""; $("expOpen").onclick = () => api("/api/reveal", { path: s.folder });
-    };
-    poll();
-  } catch (e) { setStatus("expStatus", e.message, "err"); $("doExport").disabled = false; }
+    const { job } = await (await api("/api/export", { text: speakText(), title: $("expTitle").value, character: $("voice").value, speed: $("speed").value })).json();
+    const s = await pollJob(job, s => { $("expProg").max = s.total; $("expProg").value = s.done; setStatus("expStatus", `${s.done}/${s.total} · ${s.current}`); });
+    setStatus("expStatus", `נוצרו ${s.total} קבצים`, "ok");
+    $("expOpen").style.display = ""; $("expOpen").onclick = () => api("/api/reveal", { path: s.folder });
+  } catch (e) { setStatus("expStatus", e.message, "err"); } finally { $("doExport").disabled = false; }
 };
 
-/* ---------- reader / teleprompter ---------- */
+/* ================= reader / teleprompter ================= */
 const tp = { items: [], i: 0, playing: false, cache: new Map(), audio: new Audio(), gen: 0 };
 
 function renderStage(parts) {
+  dropCache(() => true);
   const st = $("stage"); st.innerHTML = '<div class="pad"></div>';
-  tp.items = []; tp.cache.clear(); tp.i = 0;
+  tp.items = []; tp.i = 0;
   parts.forEach(p => {
-    const h = document.createElement("h3"); h.textContent = p.title; st.append(h);
+    st.append(el("h3", "", p.title));
     p.sentences.forEach(s => {
-      const el = document.createElement("p"); el.textContent = s;
-      const idx = tp.items.length; el.onclick = () => jump(idx);
-      tp.items.push({ text: s, el, pointed: null }); st.append(el);
+      const e = el("p", "", s), idx = tp.items.length; e.onclick = () => jump(idx);
+      tp.items.push({ text: s, el: e, pointed: null }); st.append(e);
     });
   });
   st.insertAdjacentHTML("beforeend", '<div class="pad"></div>');
-  highlight();
-  setStatus("tpStatus", `${tp.items.length} משפטים`);
+  highlight(); setStatus("tpStatus", `${tp.items.length} משפטים`);
 }
 
 function highlight() {
@@ -852,13 +1015,18 @@ function highlight() {
   st.scrollTo({ top: cur.el.offsetTop - st.clientHeight / 2 + cur.el.offsetHeight / 2, behavior: "smooth" });
 }
 
+/** Free audio that is no longer near the reading position (long books would otherwise fill the memory). */
+function dropCache(test) {
+  for (const [k, p] of tp.cache) if (test(k)) { p.then(u => URL.revokeObjectURL(u), () => {}); tp.cache.delete(k); }
+}
+
 function prepare(k) {  // nikud + audio for sentence k, cached
   if (k < 0 || k >= tp.items.length) return null;
   if (!tp.cache.has(k)) {
     const voice = $("tpVoice").value, speed = $("tpSpeed").value, it = tp.items[k];
     const p = (async () => {
-      const nk = await (await api("/api/nikud", { text: it.text })).json();
-      it.pointed = nk.text; if ($("tpNikud").checked) it.el.textContent = it.pointed;
+      if (!it.pointed) { it.pointed = (await (await api("/api/nikud", { text: it.text })).json()).text; }
+      if ($("tpNikud").checked) it.el.textContent = it.pointed;
       const r = await api("/api/speak", { text: it.pointed, character: voice, speed });
       return URL.createObjectURL(await r.blob());
     })();
@@ -873,9 +1041,10 @@ async function playFrom(k) {
   tp.i = k; highlight();
   if (k >= tp.items.length) { stop(); setStatus("tpStatus", "סוף המסמך", "ok"); return; }
   setStatus("tpStatus", `${k + 1} / ${tp.items.length}`);
+  const ahead = SET?.app?.reader_prefetch || 2;
+  dropCache(j => j < k - 1 || j > k + ahead + 2);
   try {
     const url = await prepare(k);
-    const ahead = (SET && SET.app && SET.app.reader_prefetch) || 2;
     for (let n = 1; n <= ahead; n++) prepare(k + n);  // read ahead so there is no gap
     if (gen !== tp.gen || !tp.playing) return;
     tp.audio.src = url; await tp.audio.play();
@@ -886,7 +1055,7 @@ tp.audio.onended = () => { if (tp.playing) playFrom(tp.i + 1); };
 function start() { if (!tp.items.length) return; tp.playing = true; $("tpPlay").textContent = "⏸"; playFrom(tp.i); }
 function stop() { tp.playing = false; tp.gen++; tp.audio.pause(); $("tpPlay").textContent = "▶"; }
 function jump(k) { k = Math.max(0, Math.min(tp.items.length - 1, k)); tp.audio.pause(); if (tp.playing) playFrom(k); else { tp.i = k; highlight(); } }
-const resetAudio = () => { tp.cache.clear(); if (tp.playing) playFrom(tp.i); };
+const resetAudio = () => { dropCache(() => true); if (tp.playing) playFrom(tp.i); };
 
 $("tpPlay").onclick = () => tp.playing ? stop() : start();
 $("tpNext").onclick = () => jump(tp.i + 1);
@@ -899,10 +1068,9 @@ $("tpFull").onclick = () => $("stage").requestFullscreen?.();
 document.addEventListener("keydown", (e) => {
   if (!$("reader").classList.contains("on") || ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
   if (e.code === "Space") { e.preventDefault(); $("tpPlay").click(); }
-  else if (e.key === "ArrowLeft") { e.preventDefault(); jump(tp.i + 1); }   // RTL: left = forward
+  else if (e.key === "ArrowLeft") { e.preventDefault(); jump(tp.i + 1); }  // RTL: left = forward
   else if (e.key === "ArrowRight") { e.preventDefault(); jump(tp.i - 1); }
 });
-
 $("rdLoad").onclick = async () => {
   const f = $("rdFile").files[0]; if (!f) return setStatus("rdStatus", "בחר קובץ", "err");
   stop(); setStatus("rdStatus", "קורא את הקובץ…");
@@ -915,7 +1083,7 @@ $("rdFromText").onclick = async () => {
   catch (e) { setStatus("rdStatus", e.message, "err"); }
 };
 
-/* ---------- story ---------- */
+/* ================= story ================= */
 const SAMPLE_STORY = `# סצנה 1: בספרייה
 @מספר: זה היה ערב שקט בספריית האוניברסיטה.
 @דנה [שמחה]: יוסי! מצאתי את המאמר שחיפשנו! [צחוק]
@@ -926,38 +1094,32 @@ const SAMPLE_STORY = `# סצנה 1: בספרייה
 # סצנה 2: החשכה
 @מספר [פחד]: ופתאום, כל האורות כבו.
 @דנה: [היסוס] אני חושבת ש… [נשימה] כדאי שנצא.`;
-let stCast = {}, stSpeakers = [], stChars = [];
+const DEFAULT_CAST = ["noa", "adam", "maya", "daniel", "tamar", "david", "shira", "jonathan"];
+let stCast = {}, stSpeakers = [];
 try { stCast = JSON.parse(localStorage.getItem("stCast") || "{}"); } catch {}
 try { $("stScript").value = localStorage.getItem("stScript") || SAMPLE_STORY; } catch { $("stScript").value = SAMPLE_STORY; }
+const saveStory = () => { try { localStorage.setItem("stScript", $("stScript").value); localStorage.setItem("stCast", JSON.stringify(stCast)); } catch {} };
 
 function insertAtCursor(text, { wrap = false, newLine = false } = {}) {
   const ta = $("stScript"), s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
-  let ins = text, caret;
-  if (wrap) {  // emphasis: wrap the selection in *…*
-    const sel = v.slice(s, e) || "מילה"; ins = `*${sel}*`;
-  } else if (newLine) {
-    const atLineStart = s === 0 || v[s - 1] === "\n";
-    ins = (atLineStart ? "" : "\n") + text;
-  } else {
-    if (s > 0 && !/\s/.test(v[s - 1])) ins = " " + ins;
-    if (v[e] && !/\s/.test(v[e])) ins = ins + " ";
-  }
-  ta.setRangeText(ins, s, e, "end"); caret = ta.selectionEnd;
-  ta.focus(); ta.setSelectionRange(caret, caret); ta.dispatchEvent(new Event("input"));
+  let ins = text;
+  if (wrap) ins = `*${v.slice(s, e) || "מילה"}*`;  // emphasis wraps the selection
+  else if (newLine) ins = (s === 0 || v[s - 1] === "\n" ? "" : "\n") + text;
+  else { if (s > 0 && !/\s/.test(v[s - 1])) ins = " " + ins; if (v[e] && !/\s/.test(v[e])) ins += " "; }
+  ta.setRangeText(ins, s, e, "end");
+  ta.focus(); ta.dispatchEvent(new Event("input"));
 }
 
 async function loadPalette() {
-  const cat = await (await fetch("/api/story/catalogue")).json();
-  const pal = $("stPalette"); pal.innerHTML = "";
+  const cat = await getJSON("/api/story/catalogue"), pal = $("stPalette"); pal.innerHTML = "";
   for (const [group, items] of Object.entries(cat)) {
-    const h = document.createElement("h3"); h.className = "pal-h"; h.textContent = group; pal.append(h);
-    const box = document.createElement("div"); box.className = "pal-btns";
-    for (const it of items) {
-      const b = document.createElement("button"); b.textContent = it.name; b.title = it.desc;
-      if (it.kind === "style") b.className = "style";
+    pal.append(el("h3", "pal-h", group));
+    const box = el("div", "pal-btns");
+    items.forEach(it => {
+      const b = el("button", it.kind === "style" ? "style" : "", it.name); b.title = it.desc;
       b.onclick = () => it.kind === "emphasis" ? insertAtCursor("", { wrap: true }) : insertAtCursor(it.insert);
       box.append(b);
-    }
+    });
     pal.append(box);
   }
 }
@@ -965,27 +1127,20 @@ async function loadPalette() {
 function renderCast() {
   const box = $("stCast"); box.innerHTML = "";
   stSpeakers.forEach((name, i) => {
-    const row = document.createElement("div"); row.className = "who";
-    const b = document.createElement("b"); b.textContent = name;
-    const sel = document.createElement("select");
-    for (const c of stChars) sel.add(new Option(`${c.name} · ${c.source}`, c.id));
-    const fallback = ["noa", "adam", "maya", "daniel", "tamar", "david", "shira", "jonathan"][i % 8];
-    const byName = stChars.find(c => c.name === name);  // a speaker named like one of my characters gets that voice
-    sel.value = stCast[name] && stChars.some(c => c.id === stCast[name]) ? stCast[name] : byName ? byName.id : fallback;
+    const row = el("div", "who"), sel = el("select");
+    CHARS.forEach(c => sel.add(new Option(`${c.name} · ${c.source}`, c.id)));
+    const byName = CHARS.find(c => c.name === name);  // a speaker named like one of my characters gets that voice
+    sel.value = stCast[name] && CHARS.some(c => c.id === stCast[name]) ? stCast[name] : byName ? byName.id : DEFAULT_CAST[i % DEFAULT_CAST.length];
     stCast[name] = sel.value;
     sel.onchange = () => { stCast[name] = sel.value; saveStory(); };
-    row.append(b, sel); box.append(row);
+    row.append(el("b", "", name), sel); box.append(row);
   });
   const cb = $("stCharBtns"); cb.innerHTML = "";
   stSpeakers.forEach(name => {
-    const b = document.createElement("button"); b.className = "char"; b.textContent = "@" + name;
-    b.title = "שורה חדשה לדמות"; b.onclick = () => insertAtCursor(`@${name}: `, { newLine: true }); cb.append(b);
+    const b = el("button", "char", "@" + name); b.title = "שורה חדשה לדמות";
+    b.onclick = () => insertAtCursor(`@${name}: `, { newLine: true }); cb.append(b);
   });
   saveStory();
-}
-
-function saveStory() {
-  try { localStorage.setItem("stScript", $("stScript").value); localStorage.setItem("stCast", JSON.stringify(stCast)); } catch {}
 }
 
 let stParseTimer = null;
@@ -995,65 +1150,47 @@ async function parseStory() {
     stSpeakers = j.speakers; renderCast();
     $("stErrors").textContent = j.errors.join(" · ");
     setStatus("stStatus", `${j.lines.length} שורות · ${j.speakers.length} דמויות`);
-    return j;
   } catch (e) { setStatus("stStatus", e.message, "err"); }
 }
 $("stScript").addEventListener("input", () => { saveStory(); clearTimeout(stParseTimer); stParseTimer = setTimeout(parseStory, 500); });
 
-/* character picker: my character library with text search */
+/* character picker */
 let pickSel = 0, pickRows = [], pickCaret = 0;
 const norm = (s) => (s || "").toLowerCase().replace(/[֑-ׇ]/g, "");
+const esc = (s) => s.replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 
 function openPicker() {
-  pickCaret = $("stScript").selectionStart;  // remember where to insert: the dialog steals focus
-  $("pickQ").value = ""; renderPicker(); $("pick").showModal(); $("pickQ").focus();
+  pickCaret = $("stScript").selectionStart;  // the dialog steals focus: remember where to insert
+  $("pickQ").value = ""; pickSel = 0; renderPicker(); $("pick").showModal(); $("pickQ").focus();
 }
-
 function renderPicker() {
-  const q = norm($("pickQ").value.trim());
-  const list = $("pickList"); list.innerHTML = "";
-  pickRows = stChars.filter(c => !q || norm(c.name).includes(q) || norm(c.source).includes(q) || norm(c.id).includes(q))
-    .map(c => ({ kind: "char", c }));
-  const typed = $("pickQ").value.trim().replace(/[:@\[\]]/g, "");
-  if (typed && !stChars.some(c => c.name === typed)) pickRows.push({ kind: "new", name: typed });
+  const raw = $("pickQ").value.trim(), q = norm(raw), list = $("pickList"); list.innerHTML = "";
+  pickRows = CHARS.filter(c => !q || norm(c.name).includes(q) || norm(c.source).includes(q)).map(c => ({ kind: "char", c }));
+  const typed = raw.replace(/[:@[\]]/g, "");
+  if (typed && !CHARS.some(c => c.name === typed)) pickRows.push({ kind: "new", name: typed });
   pickSel = Math.min(pickSel, Math.max(0, pickRows.length - 1));
-  if (!pickRows.length) { list.innerHTML = '<div class="hint" style="padding:10px">לא נמצאו דמויות</div>'; return; }
+  if (!pickRows.length) { list.append(el("div", "hint", "לא נמצאו דמויות")); return; }
   pickRows.forEach((r, i) => {
-    const el = document.createElement("div"); el.className = "pick-item" + (i === pickSel ? " sel" : "") + (r.kind === "new" ? " new" : "");
-    const nm = document.createElement("div"); nm.className = "nm";
-    if (r.kind === "new") {
-      nm.textContent = `+ דמות חדשה בשם "${r.name}"`;
-      const sm = document.createElement("small"); sm.textContent = "תקבל קול ברירת מחדל — אפשר לשנות בליהוק"; nm.append(sm);
-    } else {
-      nm.innerHTML = highlightMatch(r.c.name, q);
-      const sm = document.createElement("small"); sm.textContent = r.c.source; nm.append(sm);
-      if (stSpeakers.includes(r.c.name)) { const t = document.createElement("span"); t.className = "in-story"; t.textContent = "כבר בסיפור"; nm.append(t); }
+    const row = el("div", "pick-item" + (i === pickSel ? " sel" : "") + (r.kind === "new" ? " new" : "")), nm = el("div", "nm");
+    if (r.kind === "new") { nm.textContent = `+ דמות חדשה בשם "${r.name}"`; nm.append(el("small", "", "תקבל קול ברירת מחדל — אפשר לשנות בליהוק")); }
+    else {
+      const i0 = norm(r.c.name).indexOf(q);
+      nm.innerHTML = q && i0 >= 0 ? esc(r.c.name.slice(0, i0)) + "<mark>" + esc(r.c.name.slice(i0, i0 + q.length)) + "</mark>" + esc(r.c.name.slice(i0 + q.length)) : esc(r.c.name);
+      nm.append(el("small", "", r.c.source));
+      if (stSpeakers.includes(r.c.name)) nm.append(el("span", "in-story", "כבר בסיפור"));
     }
-    el.append(nm);
-    if (r.kind === "char") {
-      const b = document.createElement("button"); b.className = "btn sec"; b.textContent = "▶ דוגמה";
-      b.onclick = (e) => { e.stopPropagation(); sample(r.c.id, b); }; el.append(b);
-    }
-    el.onclick = () => choosePick(r);
-    list.append(el);
+    row.append(nm);
+    if (r.kind === "char") { const b = el("button", "btn sec small", "▶ דוגמה"); b.onclick = (e) => { e.stopPropagation(); sample(r.c.id, b); }; row.append(b); }
+    row.onclick = () => choosePick(r); list.append(row);
   });
 }
-
-function highlightMatch(name, q) {
-  const esc = (s) => s.replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
-  if (!q) return esc(name);
-  const i = norm(name).indexOf(q);
-  return i < 0 ? esc(name) : esc(name.slice(0, i)) + "<mark>" + esc(name.slice(i, i + q.length)) + "</mark>" + esc(name.slice(i + q.length));
-}
-
 function choosePick(r) {
   const name = r.kind === "new" ? r.name : r.c.name;
   if (r.kind === "char") stCast[name] = r.c.id;
   $("pick").close();
-  const ta = $("stScript"); ta.focus(); ta.setSelectionRange(pickCaret, pickCaret);
+  $("stScript").focus(); $("stScript").setSelectionRange(pickCaret, pickCaret);
   insertAtCursor(`@${name}: `, { newLine: true });
 }
-
 $("pickQ").oninput = () => { pickSel = 0; renderPicker(); };
 $("pickQ").onkeydown = (e) => {
   if (e.key === "ArrowDown") { e.preventDefault(); pickSel = Math.min(pickRows.length - 1, pickSel + 1); renderPicker(); }
@@ -1062,64 +1199,48 @@ $("pickQ").onkeydown = (e) => {
 };
 $("pickClose").onclick = () => $("pick").close();
 $("pick").addEventListener("click", (e) => { if (e.target === $("pick")) $("pick").close(); });  // click outside closes
-$("stAddChar").onclick = openPicker;
-$("stAddChar2").onclick = openPicker;
+$("stAddChar").onclick = $("stAddChar2").onclick = openPicker;
 
 $("stLine").onclick = async () => {
-  const ta = $("stScript"); const row = ta.value.slice(0, ta.selectionStart).split("\n").length;
+  const ta = $("stScript"), row = ta.value.slice(0, ta.selectionStart).split("\n").length;
   $("stLine").disabled = true; setStatus("stStatus", "מקריא את השורה…");
   try {
     const r = await api("/api/story/line", { script: ta.value, row, cast: JSON.stringify(stCast), speed: $("stSpeed").value });
-    $("stPlayer").style.display = ""; $("stPlayer").src = URL.createObjectURL(await r.blob()); $("stPlayer").play();
+    $("stPlayer").style.display = ""; setAudio($("stPlayer"), await r.blob()); $("stPlayer").play();
     setStatus("stStatus", `שורה ${r.headers.get("X-Line")} · ${r.headers.get("X-Synth-Seconds")} שניות`, "ok");
   } catch (e) { setStatus("stStatus", e.message, "err"); } finally { $("stLine").disabled = false; }
 };
 
 $("stRender").onclick = async () => {
   const title = ($("stScript").value.match(/^# (.+)$/m)?.[1] || "סיפור").replace(/^סצנה \d+:?\s*/, "") || "סיפור";
-  $("stRender").disabled = true; $("stOpen").style.display = "none"; $("stFiles").textContent = "";
+  $("stRender").disabled = true; $("stOpen").style.display = "none"; $("stFiles").textContent = ""; $("stProg").style.display = "";
   try {
-    const j = await (await api("/api/story/render", { script: $("stScript").value, cast: JSON.stringify(stCast), title,
+    const { job } = await (await api("/api/story/render", { script: $("stScript").value, cast: JSON.stringify(stCast), title,
       speed: $("stSpeed").value, gap: $("stGap").value })).json();
-    $("stProg").style.display = ""; $("stProg").max = j.total;
-    const poll = async () => {
-      const s = await (await fetch(`/api/jobs/${j.job}`)).json();
-      $("stProg").value = s.done;
-      if (s.state === "running") { setStatus("stStatus", `${s.done}/${s.total} · ${s.current}`); return setTimeout(poll, 600); }
-      $("stRender").disabled = false;
-      if (s.state === "error") return setStatus("stStatus", s.error, "err");
-      setStatus("stStatus", `הסיפור מוכן · ${s.scenes} סצנות · ${s.total} שורות`, "ok");
-      $("stPlayer").style.display = ""; $("stPlayer").src = "/api/file?path=" + encodeURIComponent(s.full);
-      $("stOpen").style.display = ""; $("stOpen").onclick = () => api("/api/reveal", { path: s.folder });
-      $("stFiles").textContent = `בתיקייה: הסיפור המלא ב־MP3, קובץ MP3 + כתוביות לכל סצנה (${s.scenes}), כתוביות לסיפור המלא, פלייליסט ותסריט`;
-    };
-    poll();
-  } catch (e) { setStatus("stStatus", e.message, "err"); $("stRender").disabled = false; }
+    const s = await pollJob(job, s => { $("stProg").max = s.total; $("stProg").value = s.done; setStatus("stStatus", `${s.done}/${s.total} · ${s.current}`); });
+    setStatus("stStatus", `הסיפור מוכן · ${s.scenes} סצנות · ${s.total} שורות`, "ok");
+    $("stPlayer").style.display = ""; setAudio($("stPlayer"), "/api/file?path=" + encodeURIComponent(s.full));
+    $("stOpen").style.display = ""; $("stOpen").onclick = () => api("/api/reveal", { path: s.folder });
+    $("stFiles").textContent = `בתיקייה: הסיפור המלא, קובץ MP3 וכתוביות לכל סצנה (${s.scenes}), כתוביות לכל הסיפור, פלייליסט ותסריט`;
+  } catch (e) { setStatus("stStatus", e.message, "err"); } finally { $("stRender").disabled = false; }
 };
 
-async function initStory() {
-  stChars = await (await fetch("/api/characters")).json();
-  await loadPalette(); await parseStory();
-}
-
-/* ---------- cloning ---------- */
+/* ================= cloning ================= */
 let recorder = null, recBlob = null;
 $("recBtn").onclick = async () => {
-  if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+  if (recorder?.state === "recording") { recorder.stop(); return; }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const chunks = []; recorder = new MediaRecorder(stream);
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true }), chunks = [];
+    recorder = new MediaRecorder(stream);
     recorder.ondataavailable = e => chunks.push(e.data);
     recorder.onstop = () => {
       stream.getTracks().forEach(t => t.stop());
       recBlob = new Blob(chunks, { type: recorder.mimeType });
-      $("recBtn").textContent = "● הקלט שוב"; $("recBtn").classList.remove("rec");
-      setStatus("recStatus", "ההקלטה מוכנה", "ok");
+      $("recBtn").textContent = "● הקלט שוב"; $("recBtn").classList.remove("rec"); setStatus("recStatus", "ההקלטה מוכנה", "ok");
     };
     recorder.start(); recBlob = null;
     $("recBtn").textContent = "■ עצור"; $("recBtn").classList.add("rec");
-    const t0 = Date.now();
-    const tick = setInterval(() => {
+    const t0 = Date.now(), tick = setInterval(() => {
       if (recorder.state !== "recording") return clearInterval(tick);
       setStatus("recStatus", `מקליט… ${Math.round((Date.now() - t0) / 1000)} שניות (מומלץ 10)`);
     }, 500);
@@ -1135,11 +1256,10 @@ $("cloneTextFile").onchange = async () => {
 $("cloneAutoText").onclick = async () => {
   const a = cloneAudio(); if (!a) return setStatus("cloneStatus", "קודם בחר הקלטה", "err");
   $("cloneAutoText").disabled = true; setStatus("cloneStatus", "מתמלל…");
-  try { const j = await (await api("/api/transcribe", {}, { media: a })).json(); $("cloneText").value = j.text;
+  try { $("cloneText").value = (await (await api("/api/transcribe", {}, { media: a })).json()).text;
         setStatus("cloneStatus", "בדוק ותקן את התמלול לפני יצירת הדמות", "warn"); }
   catch (e) { setStatus("cloneStatus", e.message, "err"); } finally { $("cloneAutoText").disabled = false; }
 };
-
 $("doClone").onclick = async () => {
   const a = cloneAudio();
   if (!$("cloneName").value.trim()) return setStatus("cloneStatus", "צריך שם לדמות", "err");
@@ -1147,14 +1267,12 @@ $("doClone").onclick = async () => {
   $("doClone").disabled = true; setStatus("cloneStatus", "מנתח את ההקלטה ויוצר קול…");
   try {
     const j = await (await api("/api/characters/clone",
-      { name: $("cloneName").value.trim(), consent: $("consent").checked, transcript: $("cloneText").value },
-      { audio: a })).json();
+      { name: $("cloneName").value.trim(), consent: $("consent").checked, transcript: $("cloneText").value }, { audio: a })).json();
     const q = j.quality != null ? ` · התאמה לתמלול ${Math.round(j.quality * 100)}%` : "";
     setStatus("cloneStatus", `הדמות נוצרה מ־${j.ref_seconds} שניות דיבור${q}${j.notes.length ? " · " + j.notes.join(" · ") : ""}`, j.notes.length ? "warn" : "ok");
     await loadChars();
   } catch (e) { setStatus("cloneStatus", e.message, "err"); } finally { $("doClone").disabled = false; }
 };
-
 $("mixR").oninput = () => $("mixRv").textContent = Math.round($("mixR").value * 100) + "%";
 $("doMix").onclick = async () => {
   if (!$("mixName").value.trim()) return setStatus("mixStatus", "צריך שם לדמות", "err");
@@ -1165,57 +1283,55 @@ $("doMix").onclick = async () => {
   } catch (e) { setStatus("mixStatus", e.message, "err"); } finally { $("doMix").disabled = false; }
 };
 
-/* ---------- transcription ---------- */
+/* ================= transcription ================= */
 $("doAsr").onclick = async () => {
-  const f = $("asrFile").files[0];
-  if (!f) return setStatus("asrStatus", "בחר קובץ", "err");
+  const f = $("asrFile").files[0]; if (!f) return setStatus("asrStatus", "בחר קובץ", "err");
   $("doAsr").disabled = true; setStatus("asrStatus", "מתמלל… (בפעם הראשונה טוען את המודל)");
   try {
     const j = await (await api("/api/transcribe", {}, { media: [f, f.name] })).json();
     $("asrText").textContent = j.text;
-    $("srtDl").href = URL.createObjectURL(new Blob([j.srt], { type: "text/plain" })); $("srtDl").style.display = "";
-    $("toSpeak").style.display = "";
+    if ($("srtDl")._url) URL.revokeObjectURL($("srtDl")._url);
+    $("srtDl").href = $("srtDl")._url = URL.createObjectURL(new Blob([j.srt], { type: "text/plain" }));
+    $("srtDl").style.display = ""; $("toSpeak").style.display = "";
     setStatus("asrStatus", `${Math.round(j.audio_seconds)} שניות תומללו ב־${Math.round(j.took_seconds)} שניות`, "ok");
   } catch (e) { setStatus("asrStatus", e.message, "err"); } finally { $("doAsr").disabled = false; }
 };
-$("toSpeak").onclick = () => { $("plain").value = $("asrText").textContent; document.querySelector('nav button[data-tab=speak]').click(); };
+$("toSpeak").onclick = () => { $("plain").value = $("asrText").textContent; estimateDoc(); showTab("speak"); };
 
-/* ---------- first run: download the models ---------- */
+/* ================= first run ================= */
 async function checkSetup() {
-  const s = await (await fetch("/api/setup/status")).json();
+  const s = await getJSON("/api/setup/status");
   if (s.ready) return true;
   const box = $("setupPacks"); box.innerHTML = "";
   s.packs.forEach(p => {
-    const l = document.createElement("label"); l.style.cssText = "display:flex;gap:8px;align-items:center;padding:6px 0;color:var(--ink);font-size:16px";
-    const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = p.id;
-    cb.checked = p.required || !p.installed; cb.disabled = p.required || p.installed;
-    const t = document.createElement("span");
-    t.textContent = `${p.name} · ${p.size}${p.installed ? " · מותקן" : p.required ? " · חובה" : " · לא חובה"}`;
-    l.append(cb, t); box.append(l);
+    const l = el("label"); l.style.cssText = "display:flex;gap:10px;align-items:center;padding:7px 0;color:var(--ink);font-size:16px";
+    const cb = el("input"); cb.type = "checkbox"; cb.value = p.id; cb.checked = !p.installed; cb.disabled = p.required || p.installed;
+    cb.dataset.installed = p.installed ? "1" : "";
+    l.append(cb, el("span", "", `${p.name} · ${p.size}${p.installed ? " · מותקן" : p.required ? " · חובה" : " · לא חובה"}`));
+    box.append(l);
   });
   $("setup").showModal();
   return false;
 }
 $("setup").addEventListener("cancel", (e) => e.preventDefault());  // the app cannot work without the required models
 $("setupGo").onclick = async () => {
-  const ids = [...document.querySelectorAll("#setupPacks input")].filter(c => c.checked && !c.closest("label").textContent.includes("מותקן")).map(c => c.value);
+  const ids = [...document.querySelectorAll("#setupPacks input")].filter(c => c.checked && !c.dataset.installed).map(c => c.value);
   $("setupGo").disabled = true; $("setupProg").style.display = "";
   try {
-    const j = await (await api("/api/setup/download", { packs: ids.join(",") })).json();
-    const poll = async () => {
-      const s = await (await fetch(`/api/jobs/${j.job}`)).json();
-      $("setupProg").max = s.total; $("setupProg").value = s.done;
-      const pct = Math.round(100 * s.done / Math.max(1, s.total));
-      if (s.state === "running") { setStatus("setupStatus", `${pct}% · ${s.current}`); return setTimeout(poll, 1000); }
-      if (s.state === "error") { setStatus("setupStatus", s.error + " — בדוק את החיבור לאינטרנט ונסה שוב", "err"); $("setupGo").disabled = false; return; }
-      setStatus("setupStatus", "ההורדה הסתיימה", "ok"); setTimeout(() => location.reload(), 800);
-    };
-    poll();
-  } catch (e) { setStatus("setupStatus", e.message, "err"); $("setupGo").disabled = false; }
+    const { job } = await (await api("/api/models/download", { packs: ids.join(",") })).json();
+    await pollJob(job, s => { $("setupProg").max = s.total; $("setupProg").value = s.done;
+      setStatus("setupStatus", `${Math.round(100 * s.done / Math.max(1, s.total))}% · ${s.current}`); }, 1000);
+    setStatus("setupStatus", "ההורדה הסתיימה", "ok"); setTimeout(() => location.reload(), 800);
+  } catch (e) { setStatus("setupStatus", e.message + " — בדוק את החיבור לאינטרנט ונסה שוב", "err"); $("setupGo").disabled = false; }
 };
 
-loadSettings().catch(() => {});
-checkSetup().then(ok => { if (ok) loadChars().then(initStory); });
+/* ================= start ================= */
+(async () => {
+  await loadSettings().catch(e => toast(e.message));
+  if (!(await checkSetup())) return;
+  await loadChars();
+  await loadPalette(); await parseStory(); estimateDoc();
+})();
 </script>
 </body>
 </html>

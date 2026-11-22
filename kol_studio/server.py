@@ -3,6 +3,8 @@
 Started by kol_studio.desktop (the app) or `python -m kol_studio.server` (development).
 Everything stays on this computer (binds to 127.0.0.1 only).
 """
+import contextlib
+import difflib
 import io
 import json
 import os
@@ -15,7 +17,6 @@ import uuid
 from pathlib import Path
 
 import av
-import jiwer
 import numpy as np
 import soundfile as sf
 import uvicorn
@@ -28,25 +29,65 @@ from faster_whisper import WhisperModel
 from faster_whisper.audio import decode_audio
 from phonikud_onnx import Phonikud
 from renikud_onnx import G2P
+from scipy.signal import resample_poly
 
 from . import docs, models_setup, paths, story
 from . import settings as cfg
 
-MODELS = paths.MODELS
-BUNDLE = MODELS / "bluev3"
+BUNDLE = paths.MODELS / "bluev3"
 CHARS = paths.CHARS
-TMP = paths.TMP
-OUTPUT = paths.OUTPUT_DEFAULT  # exported audio folders (changeable in Settings)
 
 PRESETS = {  # BlueV3 built-in voices (CC BY 4.0, LibriTTS-R speakers)
     "maya": "מאיה", "noa": "נועה", "lily": "לילי", "tamar": "תמר", "shira": "שירה",
     "yael": "יעל", "emma": "אמה", "sara": "שרה", "adam": "אדם", "daniel": "דניאל",
     "david": "דוד", "jonathan": "יונתן", "ethan": "איתן", "michael": "מיכאל", "ariel": "אריאל",
 }
+DEFAULT_CAST = ["noa", "adam", "maya", "daniel", "tamar", "david", "shira", "jonathan"]
+CHAR_ID = re.compile(r"[0-9a-f]{10}")
 REF_SECONDS = 9.0  # BlueV3 reads only the first ~9 s of a reference clip
+PHONETIC_MARKS = re.compile("[ֽ֫֯|]")  # phonikud's stress / vocal-shva marks
+NIKUD = re.compile(r"[֑-ׇ]")
+UNSAFE_NAME = re.compile(r"[^\w֐-׿\- ]")
+BAD_MEDIA = "לא הצלחתי לקרוא את הקובץ — ייתכן שהוא פגום או בפורמט שלא נתמך"
 
 SETTINGS = cfg.load()
 
+
+# ---------- folders ----------
+
+def out_dir() -> Path:
+    custom = SETTINGS["app"].get("output_dir", "").strip()
+    d = Path(custom).expanduser() if custom else paths.OUTPUT_DEFAULT
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def allowed_path(p: Path) -> bool:
+    roots = {paths.OUTPUT_DEFAULT.resolve(), out_dir().resolve()}
+    return any(p == r or r in p.parents for r in roots)
+
+
+def safe_name(text: str, fallback: str, limit: int = 60) -> str:
+    return UNSAFE_NAME.sub("", text).strip()[:limit] or fallback
+
+
+def new_folder(title: str, fallback: str) -> Path:
+    """A fresh output folder; never reuses one (two exports in the same minute get different names)."""
+    base = out_dir() / f"{safe_name(title, fallback)} {time.strftime('%Y-%m-%d %H-%M')}"
+    folder, n = base, 2
+    while folder.exists():
+        folder, n = base.with_name(f"{base.name} ({n})"), n + 1
+    return folder
+
+
+def clean_tmp(max_age_h: float = 24):
+    for f in paths.TMP.glob("*"):
+        with contextlib.suppress(OSError):
+            if time.time() - f.stat().st_mtime > max_age_h * 3600:
+                f.unlink()
+
+
+# ---------- engines (load on first use, so the app can open and download models before they exist) ----------
 
 def apply_threads():
     n = int(SETTINGS["app"].get("threads") or 0)
@@ -56,43 +97,19 @@ def apply_threads():
         os.environ.pop("ORT_NUM_THREADS", None)  # BlueTTS default: min(8, cores)
 
 
-def out_dir() -> Path:
-    custom = SETTINGS["app"].get("output_dir", "").strip()
-    d = Path(custom).expanduser() if custom else OUTPUT
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def allowed_path(p: Path) -> bool:
-    roots = {OUTPUT.resolve(), out_dir().resolve()}
-    return any(p == r or r in p.parents for r in roots)
-
-
-apply_threads()
-_asr = None
-_asr_lock = threading.Lock()
-_tts_lock = threading.Lock()
-
-
-def load_tts(precision: str):
+def load_tts(precision: str) -> BlueTTS:
     t = BlueTTS(onnx_dir=str(BUNDLE / "onnx"), style_json=str(BUNDLE / "voices/noa.json"), precision=precision)
     # Read the user's nikud as hard constraints instead of stripping it.
     t.tts.g2p.renikud = G2P(str(BUNDLE / "frontend/renikud/model.onnx"), niqqud="use")
     return t
 
 
-def load_nakdan(name: str):
-    if name == "dicta" and (MODELS / "dicta-1.0.onnx").exists():
-        from dicta_onnx import Dicta
-
-        return Dicta(str(MODELS / "dicta-1.0.onnx"))
-    return Phonikud(str(MODELS / "phonikud-1.0.int8.onnx"))
-
-
-# Engines load on first use, so the app opens (and can download models) before they exist.
 tts = None
 nakdan = None
+_asr = None
 _load_lock = threading.Lock()
+_tts_lock = threading.Lock()
+_asr_lock = threading.Lock()
 
 
 def engines():
@@ -104,51 +121,47 @@ def engines():
             if tts is None:
                 tts = load_tts(SETTINGS["models"]["tts_precision"])
             if nakdan is None:
-                nakdan = load_nakdan(SETTINGS["models"]["nikud"])
+                nakdan = Phonikud(str(paths.MODELS / models_setup.PACKS["nikud"].check))
     return tts, nakdan
 
-PHONETIC_MARKS = re.compile("[ֽ֫֯|]")  # phonikud's stress / vocal-shva marks
 
-
-# ---------- shared helpers ----------
-
-def asr():
+def asr(force_cpu: bool = False) -> WhisperModel:
     global _asr
     with _asr_lock:
-        if _asr is None:
+        if _asr is None or force_cpu:
             m = SETTINGS["models"]
-            path = cfg.asr_path(m["asr"])
-            if not (path / "model.bin").exists():
-                path = cfg.asr_path("ivrit-turbo")
-            if m["asr_device"] in ("auto", "gpu"):
-                # Apple GPU (~2x faster than CPU on M1 Max) or an NVIDIA card on Windows/Linux
-                gpu = "mps" if sys.platform == "darwin" else "cuda"
-                try:
-                    _asr = WhisperModel(str(path), device=gpu, compute_type="float16")
+            path = str(models_setup.asr_dir(m["asr"]))
+            if not force_cpu and m["asr_device"] in ("auto", "gpu"):
+                gpu = "mps" if sys.platform == "darwin" else "cuda"  # Apple GPU, or an NVIDIA card elsewhere
+                with contextlib.suppress(Exception):
+                    _asr = WhisperModel(path, device=gpu, compute_type="float16")
                     return _asr
-                except Exception:
-                    pass
-            _asr = WhisperModel(str(path), device="cpu", compute_type="int8")
+            _asr = WhisperModel(path, device="cpu", compute_type="int8")
     return _asr
 
 
 def transcribe_any(audio, **kw):
-    """Transcribe on the Apple GPU; ctranslate2's MPS backend is experimental, so on any error
-    switch to the CPU for good and retry."""
-    global _asr
+    """Transcribe on the GPU when possible. CTranslate2's MPS backend is experimental: on an error there,
+    switch to the CPU for good and retry once. A bad file still fails, as a clear message."""
+    if not models_setup.installed(models_setup.ASR_PACK.get(SETTINGS["models"]["asr"], "asr")) \
+            and not models_setup.installed("asr"):
+        raise HTTPException(409, "מודל התמלול לא מותקן — אפשר להוריד אותו בהגדרות")
+    model = asr()
     try:
-        segs, info = asr().transcribe(audio, **kw)
+        segs, info = model.transcribe(audio, **kw)
         return list(segs), info
-    except Exception as e:
-        print(f"[asr] GPU failed ({e!r}); using CPU")
-        with _asr_lock:
-            path = cfg.asr_path(SETTINGS["models"]["asr"])
-            if not (path / "model.bin").exists():
-                path = cfg.asr_path("ivrit-turbo")
-            _asr = WhisperModel(str(path), device="cpu", compute_type="int8")
-        segs, info = _asr.transcribe(audio, **kw)
-        return list(segs), info
+    except Exception as first:
+        if getattr(model.model, "device", "cpu") == "cpu":
+            raise HTTPException(400, BAD_MEDIA) from None
+        print(f"[asr] GPU failed ({first!r}); using CPU")
+        try:
+            segs, info = asr(force_cpu=True).transcribe(audio, **kw)
+            return list(segs), info
+        except Exception:
+            raise HTTPException(400, BAD_MEDIA) from None
 
+
+# ---------- speech ----------
 
 def add_nikud(text: str) -> str:
     """Numbers/dates -> words, then nikud. Lines that are already pointed are kept as they are."""
@@ -156,14 +169,19 @@ def add_nikud(text: str) -> str:
     for line in text.split("\n"):
         if not line.strip() or docs.is_pointed(line):
             out.append(line)
-            continue
-        norm = prepare_text_for_synthesis(line, lang="he", mark_slow=False)
-        out.append(PHONETIC_MARKS.sub("", engines()[1].add_diacritics(norm)))
+        else:
+            norm = prepare_text_for_synthesis(line, lang="he", mark_slow=False)
+            out.append(PHONETIC_MARKS.sub("", engines()[1].add_diacritics(norm)))
     return "\n".join(out)
 
 
 def voice_payload(char_id: str) -> dict:
-    p = BUNDLE / "voices" / f"{char_id}.json" if char_id in PRESETS else CHARS / char_id / "voice.json"
+    if char_id in PRESETS:
+        p = BUNDLE / "voices" / f"{char_id}.json"
+    elif CHAR_ID.fullmatch(char_id):
+        p = CHARS / char_id / "voice.json"
+    else:
+        raise HTTPException(400, "מזהה דמות לא תקין")
     if not p.exists():
         raise HTTPException(404, "דמות לא נמצאה")
     return json.loads(p.read_text())
@@ -175,10 +193,28 @@ def style_of(char_id: str):
     return style_from_payload(voice_payload(char_id))
 
 
+def track_rate(text: str, seconds: float, speed: float):
+    """Learn this computer's real speaking rate, so Settings can show honest estimates."""
+    letters = len(NIKUD.sub("", re.sub(r"\s+", "", text)))
+    if letters < 15 or seconds <= 0:
+        return
+    st = SETTINGS["stats"]
+    st["chars_per_sec"] = round(0.9 * st["chars_per_sec"] + 0.1 * letters / seconds * speed, 2)
+    n_sent = max(1, len(re.findall(r"[.!?…]", text)))
+    st["sentence_sec"] = round(0.9 * st["sentence_sec"] + 0.1 * seconds / n_sent, 2)
+    st["samples"] = st.get("samples", 0) + 1
+    if st["samples"] % 25 == 0:  # the window may be closed without a clean shutdown
+        with contextlib.suppress(OSError):
+            cfg.save(SETTINGS)
+
+
 def synth(pointed_text: str, character: str, speed: float) -> tuple[np.ndarray, int]:
+    engine = engines()[0]  # first: a clear message when the models are not installed yet
     style = style_of(character)
     with _tts_lock:
-        return engines()[0].synthesize(pointed_text, lang="he", speed=speed, style=style, normalize_text=False)
+        samples, sr = engine.synthesize(pointed_text, lang="he", speed=speed, style=style, normalize_text=False)
+    track_rate(pointed_text, len(samples) / sr, speed)
+    return samples, sr
 
 
 def wav_bytes(samples: np.ndarray, sr: int) -> bytes:
@@ -198,43 +234,76 @@ def write_mp3(path: Path, samples: np.ndarray, sr: int, title: str = "", artist:
         pcm = (np.clip(samples, -1, 1) * 32767).astype(np.int16).reshape(1, -1)
         frame = av.AudioFrame.from_ndarray(pcm, format="s16", layout="mono")
         frame.sample_rate = sr
-        for pkt in st.encode(frame):
-            out.mux(pkt)
-        for pkt in st.encode(None):
+        for pkt in [*st.encode(frame), *st.encode(None)]:
             out.mux(pkt)
 
 
-def norm_words(t: str) -> str:
-    t = re.sub(r"[֑-ׇ]", "", t)
-    t = re.sub(r"[^\w\s]", " ", t)
-    return " ".join(t.split())
+def srt_time(x: float) -> str:
+    h, m, s = int(x // 3600), int(x % 3600 // 60), x % 60
+    return f"{h:02d}:{m:02d}:{s:06.3f}".replace(".", ",")
+
+
+def norm_words(t: str) -> list[str]:
+    return re.sub(r"[^\w\s]", " ", NIKUD.sub("", t)).split()
+
+
+def transcript_match(transcript: str, heard: str) -> float:
+    """Share of the user's transcript words that are heard in the recording, in order.
+    A transcript of only part of the recording still scores high."""
+    want, got = norm_words(transcript), norm_words(heard)
+    if not want:
+        return 0.0
+    matched = sum(b.size for b in difflib.SequenceMatcher(None, want, got, autojunk=False).get_matching_blocks())
+    return matched / len(want)
 
 
 def save_upload(upload: UploadFile) -> Path:
-    p = TMP / f"up_{uuid.uuid4().hex}{Path(upload.filename or '').suffix.lower()}"
+    p = paths.TMP / f"up_{uuid.uuid4().hex}{Path(upload.filename or '').suffix.lower()}"
     p.write_bytes(upload.file.read())
     return p
 
 
-# ---------- jobs (long exports run in the background) ----------
+def parts_json(text: str, max_chars: int = 1200) -> list[dict]:
+    return [{"title": p["title"], "sentences": docs.split_sentences(p["text"])}
+            for p in docs.split_parts(text, max_chars=max_chars)]
+
+
+# ---------- background jobs ----------
 
 JOBS: dict[str, dict] = {}
 
 
-def run_job(job_id: str, fn):
+def run_job(fields: dict, fn) -> str:
+    """Run fn(job) in a thread; the UI polls /api/jobs/<id>. Keeps the 50 newest jobs."""
+    for old in list(JOBS)[:-50]:
+        if JOBS[old]["state"] != "running":
+            del JOBS[old]
+    job_id = uuid.uuid4().hex[:8]
+    JOBS[job_id] = {"state": "running", "done": 0, "total": 1, "current": "", "folder": "", **fields}
+
     def wrap():
         try:
             fn(JOBS[job_id])
             JOBS[job_id]["state"] = "done"
+        except HTTPException as e:
+            JOBS[job_id].update(state="error", error=e.detail)
         except Exception as e:  # report to the UI instead of dying silently
             JOBS[job_id].update(state="error", error=str(e))
 
     threading.Thread(target=wrap, daemon=True).start()
+    return job_id
 
 
 # ---------- API ----------
 
-app = FastAPI()
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    yield
+    with contextlib.suppress(OSError):
+        cfg.save(SETTINGS)  # keep the learned speaking rate
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/")
@@ -242,31 +311,29 @@ def index():
     return FileResponse(paths.RESOURCES / "index.html")
 
 
+@app.get("/api/jobs/{job_id}")
+def job(job_id: str):
+    if job_id not in JOBS:
+        raise HTTPException(404, "לא נמצא")
+    return JOBS[job_id]
+
+
+# --- first run ---
+
 @app.get("/api/setup/status")
 def setup_status():
-    return {"ready": models_setup.ready(), "packs": models_setup.status(), "models_dir": str(MODELS)}
+    return {"ready": models_setup.ready(), "packs": models_setup.status(), "models_dir": str(paths.MODELS)}
 
 
-@app.post("/api/setup/download")
-def setup_download(packs: str = Form(...)):
-    ids = [p for p in packs.split(",") if p in models_setup.PACKS]
+@app.post("/api/models/download")
+def download_packs(packs: str = Form(...)):
+    ids = [p for p in packs.split(",") if p in models_setup.PACKS and not models_setup.installed(p)]
     if not ids:
-        raise HTTPException(400, "לא נבחרו חבילות")
-    job_id = uuid.uuid4().hex[:8]
-    JOBS[job_id] = {"state": "running", "done": 0, "total": 1, "current": "מתחבר…", "folder": ""}
-    run_job(job_id, lambda job: models_setup.download(ids, job))
-    return {"job": job_id}
+        raise HTTPException(400, "אין מה להוריד")
+    return {"job": run_job({"current": "מתחבר…"}, lambda job: models_setup.download(ids, job))}
 
 
-@app.get("/api/characters")
-def characters():
-    out = [{"id": k, "name": v, "source": "קול מובנה"} for k, v in PRESETS.items()]
-    for d in sorted(CHARS.iterdir(), key=lambda p: p.stat().st_mtime):
-        m = d / "character.json"
-        if m.exists():
-            out.append(json.loads(m.read_text()))
-    return out
-
+# --- speech ---
 
 @app.post("/api/nikud")
 def nikud(text: str = Form(...)):
@@ -280,188 +347,56 @@ def speak(text: str = Form(...), character: str = Form("noa"), speed: float = Fo
     if not text.strip():
         raise HTTPException(400, "אין טקסט")
     t0 = time.time()
-    pointed = add_nikud(text) if auto_nikud else text
-    samples, sr = synth(pointed, character, speed)
-    secs = time.time() - t0
-    return Response(
-        wav_bytes(samples, sr),
-        media_type="audio/wav",
-        headers={"X-Synth-Seconds": f"{secs:.2f}", "X-Audio-Seconds": f"{len(samples) / sr:.2f}"},
-    )
+    samples, sr = synth(add_nikud(text) if auto_nikud else text, character, speed)
+    return Response(wav_bytes(samples, sr), media_type="audio/wav",
+                    headers={"X-Synth-Seconds": f"{time.time() - t0:.2f}", "X-Audio-Seconds": f"{len(samples) / sr:.2f}"})
 
 
 @app.post("/api/extract")
-def extract(file: UploadFile = File(...)):
+def extract(file: UploadFile = File(...)):  # noqa: B008 (FastAPI idiom)
     p = save_upload(file)
     try:
         text = docs.extract(p)
     except Exception as e:
-        raise HTTPException(400, f"לא הצלחתי לקרוא את הקובץ: {e}")
+        raise HTTPException(400, f"לא הצלחתי לקרוא את הקובץ: {e}") from None
     finally:
         p.unlink(missing_ok=True)
     if not text.strip():
         raise HTTPException(400, "לא נמצא טקסט בקובץ (אולי זה PDF סרוק כתמונה?)")
-    parts = docs.split_parts(text)
-    return {"title": Path(file.filename or "מסמך").stem, "text": text,
-            "parts": [{"title": p["title"], "sentences": docs.split_sentences(p["text"])} for p in parts]}
+    return {"title": Path(file.filename or "מסמך").stem, "text": text, "parts": parts_json(text)}
 
 
 @app.post("/api/split")
-def split(text: str = Form(...)):
-    parts = docs.split_parts(text)
-    return {"parts": [{"title": p["title"], "sentences": docs.split_sentences(p["text"])} for p in parts]}
+def split(text: str = Form(...), max_chars: int = Form(1200)):
+    return {"parts": parts_json(text, max_chars=max(200, min(max_chars, 20000)))}
 
-
-# --- characters ---
-
-def save_character(name: str, payload: dict, meta_extra: dict) -> dict:
-    cid = uuid.uuid4().hex[:10]
-    d = CHARS / cid
-    d.mkdir()
-    (d / "voice.json").write_text(json.dumps(payload))
-    meta = {"id": cid, "name": name, "created": time.strftime("%Y-%m-%d %H:%M"), **meta_extra}
-    (d / "character.json").write_text(json.dumps(meta, ensure_ascii=False))
-    return meta
-
-
-def best_window(samples16: np.ndarray, segments: list, seconds: float) -> tuple[float, float, list]:
-    """Pick the continuous stretch of speech (by ASR segments) closest to `seconds` long, starting at speech."""
-    if not segments:
-        return 0.0, min(seconds, len(samples16) / 16000), []
-    best = None
-    for i in range(len(segments)):
-        start = max(0.0, segments[i].start - 0.15)
-        used = []
-        for s in segments[i:]:
-            if s.end - start > seconds + 0.5:
-                break
-            used.append(s)
-        if not used:
-            used = [segments[i]]
-        end = min(used[-1].end + 0.2, start + seconds + 0.5)
-        speech = sum(min(s.end, end) - max(s.start, start) for s in used)
-        score = speech - 0.5 * max(0.0, (end - start) - speech)  # prefer dense speech, few gaps
-        if best is None or score > best[0]:
-            best = (score, start, end, used)
-    return best[1], best[2], best[3]
-
-
-@app.post("/api/characters/clone")
-def clone(name: str = Form(...), consent: bool = Form(False), transcript: str = Form(""),
-          audio: UploadFile = File(...)):
-    if not consent:
-        raise HTTPException(400, "צריך לאשר שיש הסכמה של בעל הקול")
-    raw = save_upload(audio)
-    try:
-        s44 = decode_audio(str(raw), sampling_rate=44100)  # any format: wav, mp3, m4a, webm, video…
-        s16 = decode_audio(str(raw), sampling_rate=16000)
-    finally:
-        raw.unlink(missing_ok=True)
-    if len(s16) < 16000 * 3:
-        raise HTTPException(400, "ההקלטה קצרה מדי — צריך לפחות 3 שניות, עדיף 8–10")
-
-    # Transcribe to find where the speech is, then keep the best ~9 s (BlueV3 reads only that much).
-    segs, _ = transcribe_any(s16, language="he", beam_size=5, vad_filter=True)
-    heard = " ".join(s.text.strip() for s in segs)
-    start, end, used = best_window(s16, segs, REF_SECONDS)
-    clip = s44[int(start * 44100): int(end * 44100)]
-
-    quality, notes = None, []
-    if transcript.strip():
-        quality = max(0.0, 1 - jiwer.wer(norm_words(transcript), norm_words(heard)))
-        if quality < 0.7:
-            notes.append("ההקלטה לא תואמת היטב לתמלול — אולי יש רעש, מוזיקה, או שהתמלול של קטע אחר")
-    if end - start < 5:
-        notes.append("פחות מ־5 שניות דיבור נקי — הדמיון לקול יהיה חלש יותר")
-
-    d = TMP / f"clip_{uuid.uuid4().hex}.wav"
-    sf.write(d, clip, 44100, subtype="PCM_16")
-    payload = export_voice_style(str(d), onnx_dir=str(BUNDLE / "onnx"), config=engines()[0].tts.cfgs)
-    meta = save_character(name, payload, {
-        "source": "שכפול מהקלטה",
-        "ref_seconds": round(end - start, 1),
-        "quality": None if quality is None else round(quality, 2),
-        "notes": notes,
-    })
-    cdir = CHARS / meta["id"]
-    d.rename(cdir / "reference.wav")
-    (cdir / "transcript_user.txt").write_text(transcript.strip())
-    (cdir / "transcript_heard.txt").write_text(heard)
-    (cdir / "reference_text.txt").write_text(" ".join(s.text.strip() for s in used))
-    return {**meta, "heard": heard}
-
-
-@app.post("/api/characters/mix")
-def mix(name: str = Form(...), a: str = Form(...), b: str = Form(...), ratio: float = Form(0.5)):
-    """New voice = (1-ratio)·A + ratio·B in the model's style space."""
-    r = min(max(ratio, 0.0), 1.0)
-    pa, pb = voice_payload(a), voice_payload(b)
-
-    def lerp(x, y):
-        return ((1 - r) * np.asarray(x, dtype=np.float64) + r * np.asarray(y, dtype=np.float64)).tolist()
-
-    payload = json.loads(json.dumps(pa))
-    for key in ("style_ttl", "style_dp"):
-        payload[key]["data"] = lerp(pa[key]["data"], pb[key]["data"])
-    sa_speed, sb_speed = pa.get("speed_scale", {}), pb.get("speed_scale", {})
-    payload["speed_scale"] = {k: (1 - r) * v + r * sb_speed.get(k, v) for k, v in sa_speed.items()}
-    payload["source"] = f"mix of {a} and {b}"
-    style_from_payload(payload)  # validate
-    return save_character(name, payload, {"source": f"ערבוב {round((1 - r) * 100)}% / {round(r * 100)}%"})
-
-
-@app.delete("/api/characters/{cid}")
-def delete_character(cid: str):
-    d = CHARS / cid
-    if cid in PRESETS or not d.is_dir() or not re.fullmatch(r"[0-9a-f]{10}", cid):
-        raise HTTPException(400, "אי אפשר למחוק את הדמות הזו")
-    trash = CHARS.parent / "characters_deleted"
-    trash.mkdir(exist_ok=True)
-    d.rename(trash / cid)  # kept, not destroyed: can be restored by moving it back
-    return {"ok": True}
-
-
-# --- export: folder of small MP3 files + playlist ---
 
 @app.post("/api/export")
-def export(text: str = Form(...), title: str = Form("הקראה"), character: str = Form("noa"),
-           speed: float = Form(1.0)):
+def export(text: str = Form(...), title: str = Form("הקראה"), character: str = Form("noa"), speed: float = Form(1.0)):
     parts = docs.split_parts(text, max_chars=int(SETTINGS["app"]["part_chars"]))
     if not parts:
         raise HTTPException(400, "אין טקסט")
-    safe = re.sub(r"[^\w֐-׿\- ]", "", title).strip()[:60] or "הקראה"
-    folder = out_dir() / f"{safe} {time.strftime('%Y-%m-%d %H-%M')}"
-    job_id = uuid.uuid4().hex[:8]
-    JOBS[job_id] = {"state": "running", "done": 0, "total": len(parts), "folder": str(folder), "current": ""}
+    folder = new_folder(title, "הקראה")
+    voice_name = next((c["name"] for c in characters() if c["id"] == character), character)
 
     def work(job):
-        folder.mkdir(parents=True)
-        voice_name = next((c["name"] for c in characters() if c["id"] == character), character)
-        m3u = ["#EXTM3U", f"#PLAYLIST:{title}"]
-        index = [f"{title}\nקול: {voice_name}\n"]
+        (folder / "טקסט").mkdir(parents=True)
+        m3u, index = ["#EXTM3U", f"#PLAYLIST:{title}"], [f"{title}\nקול: {voice_name}\n"]
         for i, part in enumerate(parts, 1):
             job["current"] = part["title"]
             pointed = add_nikud(part["text"])
             samples, sr = synth(pointed, character, speed)
-            fname = f"{i:03d} - {re.sub(r'[^\w֐-׿\- ]', '', part['title'])[:50]}.mp3"
+            secs = round(len(samples) / sr)
+            fname = f"{i:03d} - {safe_name(part['title'], 'חלק', 50)}.mp3"
             write_mp3(folder / fname, samples, sr, title=part["title"], artist=voice_name)
-            (folder / "טקסט").mkdir(exist_ok=True)
-            (folder / "טקסט" / fname.replace(".mp3", ".txt")).write_text(pointed)
-            m3u += [f"#EXTINF:{round(len(samples) / sr)},{part['title']}", fname]
-            index.append(f"{i:03d}  {part['title']}  ({round(len(samples) / sr)} שניות)")
+            (folder / "טקסט" / fname.replace(".mp3", ".txt")).write_text(pointed, encoding="utf-8")
+            m3u += [f"#EXTINF:{secs},{part['title']}", fname]
+            index.append(f"{i:03d}  {part['title']}  ({secs} שניות)")
             job["done"] = i
         (folder / "playlist.m3u8").write_text("\n".join(m3u) + "\n", encoding="utf-8")
         (folder / "תוכן עניינים.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
 
-    run_job(job_id, work)
-    return {"job": job_id, **JOBS[job_id]}
-
-
-@app.get("/api/jobs/{job_id}")
-def job(job_id: str):
-    if job_id not in JOBS:
-        raise HTTPException(404, "לא נמצא")
-    return JOBS[job_id]
+    return {"job": run_job({"total": len(parts), "folder": str(folder)}, work)}
 
 
 @app.post("/api/reveal")
@@ -478,10 +413,119 @@ def reveal(path: str = Form(...)):
     return {"ok": True}
 
 
+@app.get("/api/file")
+def get_file(path: str):
+    p = Path(path).resolve()
+    if not allowed_path(p) or not p.is_file():
+        raise HTTPException(400, "נתיב לא מורשה")
+    return FileResponse(p)
+
+
+# --- characters ---
+
+@app.get("/api/characters")
+def characters():
+    out = [{"id": k, "name": v, "source": "קול מובנה"} for k, v in PRESETS.items()]
+    for d in sorted(CHARS.iterdir(), key=lambda p: p.stat().st_mtime):
+        m = d / "character.json"
+        if m.exists():
+            out.append(json.loads(m.read_text()))
+    return out
+
+
+def save_character(name: str, payload: dict, meta_extra: dict) -> dict:
+    cid = uuid.uuid4().hex[:10]
+    d = CHARS / cid
+    d.mkdir()
+    (d / "voice.json").write_text(json.dumps(payload))
+    meta = {"id": cid, "name": name, "created": time.strftime("%Y-%m-%d %H:%M"), **meta_extra}
+    (d / "character.json").write_text(json.dumps(meta, ensure_ascii=False))
+    return meta
+
+
+def best_window(total_sec: float, segments: list, seconds: float) -> tuple[float, float, list]:
+    """The stretch of speech (by ASR segments) closest to `seconds` long, with as few gaps as possible."""
+    if not segments:
+        return 0.0, min(seconds, total_sec), []
+    best = None
+    for i, first in enumerate(segments):
+        start = max(0.0, first.start - 0.15)
+        used = [s for s in segments[i:] if s.end - start <= seconds + 0.5] or [first]
+        end = min(used[-1].end + 0.2, start + seconds + 0.5)
+        speech = sum(min(s.end, end) - max(s.start, start) for s in used)
+        score = speech - 0.5 * max(0.0, (end - start) - speech)  # prefer dense speech
+        if best is None or score > best[0]:
+            best = (score, start, end, used)
+    return best[1], best[2], best[3]
+
+
+@app.post("/api/characters/clone")
+def clone(name: str = Form(...), consent: bool = Form(False), transcript: str = Form(""),
+          audio: UploadFile = File(...)):  # noqa: B008
+    if not consent:
+        raise HTTPException(400, "צריך לאשר שיש הסכמה של בעל הקול")
+    raw = save_upload(audio)
+    try:
+        s44 = decode_audio(str(raw), sampling_rate=44100)  # any format: wav, mp3, m4a, webm, video…
+    except Exception:
+        raise HTTPException(400, BAD_MEDIA) from None
+    finally:
+        raw.unlink(missing_ok=True)
+    if len(s44) < 44100 * 3:
+        raise HTTPException(400, "ההקלטה קצרה מדי — צריך לפחות 3 שניות, עדיף 8–10")
+    s16 = resample_poly(s44, 160, 441).astype(np.float32)
+
+    # Find where the speech is, then keep the best ~9 s (BlueV3 reads only that much).
+    segs, _ = transcribe_any(s16, language="he", beam_size=5, vad_filter=True)
+    heard = " ".join(s.text.strip() for s in segs)
+    start, end, used = best_window(len(s44) / 44100, segs, REF_SECONDS)
+
+    quality, notes = None, []
+    if transcript.strip():
+        quality = transcript_match(transcript, heard)
+        if quality < 0.7:
+            notes.append("ההקלטה לא תואמת היטב לתמלול — אולי יש רעש, מוזיקה, או שהתמלול של קטע אחר")
+    if end - start < 5:
+        notes.append("פחות מ־5 שניות דיבור נקי — הדמיון לקול יהיה חלש יותר")
+
+    clip = paths.TMP / f"clip_{uuid.uuid4().hex}.wav"
+    sf.write(clip, s44[int(start * 44100): int(end * 44100)], 44100, subtype="PCM_16")
+    payload = export_voice_style(str(clip), onnx_dir=str(BUNDLE / "onnx"), config=engines()[0].tts.cfgs)
+    meta = save_character(name, payload, {"source": "שכפול מהקלטה", "ref_seconds": round(end - start, 1),
+                                          "quality": None if quality is None else round(quality, 2), "notes": notes})
+    cdir = CHARS / meta["id"]
+    clip.rename(cdir / "reference.wav")
+    (cdir / "transcript_user.txt").write_text(transcript.strip(), encoding="utf-8")
+    (cdir / "transcript_heard.txt").write_text(heard, encoding="utf-8")
+    (cdir / "reference_text.txt").write_text(" ".join(s.text.strip() for s in used), encoding="utf-8")
+    return {**meta, "heard": heard}
+
+
+@app.post("/api/characters/mix")
+def mix(name: str = Form(...), a: str = Form(...), b: str = Form(...), ratio: float = Form(0.5)):
+    """New voice = (1-ratio)·A + ratio·B in the model's style space."""
+    r = min(max(ratio, 0.0), 1.0)
+    pa, pb = voice_payload(a), voice_payload(b)
+    payload = json.loads(json.dumps(pa))
+    for key in ("style_ttl", "style_dp"):
+        payload[key]["data"] = ((1 - r) * np.asarray(pa[key]["data"]) + r * np.asarray(pb[key]["data"])).tolist()
+    sb = pb.get("speed_scale", {})
+    payload["speed_scale"] = {k: (1 - r) * v + r * sb.get(k, v) for k, v in pa.get("speed_scale", {}).items()}
+    payload["source"] = f"mix of {a} and {b}"
+    style_from_payload(payload)  # validate before saving
+    return save_character(name, payload, {"source": f"ערבוב {round((1 - r) * 100)}% / {round(r * 100)}%"})
+
+
+@app.delete("/api/characters/{cid}")
+def delete_character(cid: str):
+    if not CHAR_ID.fullmatch(cid) or not (CHARS / cid).is_dir():
+        raise HTTPException(400, "אי אפשר למחוק את הדמות הזו")
+    paths.CHARS_DELETED.mkdir(exist_ok=True)
+    (CHARS / cid).rename(paths.CHARS_DELETED / cid)  # kept, not destroyed: can be restored by moving it back
+    return {"ok": True}
+
+
 # --- stories: several characters + stage directions ---
-
-DEFAULT_CAST = ["noa", "adam", "maya", "daniel", "tamar", "david", "shira", "jonathan"]
-
 
 def cast_of(cast_json: str, speakers: list[str]) -> dict:
     try:
@@ -495,11 +539,6 @@ def line_synth(voice: str):
     return lambda text, speed: synth(add_nikud(text), voice, speed)
 
 
-def srt_time(x: float) -> str:
-    h, m, s = int(x // 3600), int(x % 3600 // 60), x % 60
-    return f"{h:02d}:{m:02d}:{s:06.3f}".replace(".", ",")
-
-
 @app.get("/api/story/catalogue")
 def story_catalogue():
     return story.catalogue()
@@ -509,7 +548,7 @@ def story_catalogue():
 def story_parse(script: str = Form(...)):
     lines, speakers, errors = story.parse(script)
     return {"speakers": speakers, "errors": errors,
-            "lines": [{"n": l.n, "row": l.row, "speaker": l.speaker, "text": l.text, "scene": l.scene} for l in lines]}
+            "lines": [{"n": ln.n, "row": ln.row, "speaker": ln.speaker, "text": ln.text, "scene": ln.scene} for ln in lines]}
 
 
 @app.post("/api/story/line")
@@ -517,12 +556,10 @@ def story_line(script: str = Form(...), row: int = Form(...), cast: str = Form("
     lines, speakers, _ = story.parse(script)
     if not lines:
         raise HTTPException(400, "אין שורות בסיפור")
-    line = next((l for l in lines if l.row >= row), lines[-1])
-    if line.row > row:  # cursor sits after the last line of a speaker block: take the previous line
-        line = max((l for l in lines if l.row <= row), key=lambda l: l.row, default=line)
-    voice = cast_of(cast, speakers)[line.speaker]
+    # the line the cursor is on, or the closest one above it
+    line = max((ln for ln in lines if ln.row <= row), key=lambda ln: ln.row, default=lines[0])
     t0 = time.time()
-    samples, sr = story.render_line(line_synth(voice), line, speed)
+    samples, sr = story.render_line(line_synth(cast_of(cast, speakers)[line.speaker]), line, speed)
     return Response(wav_bytes(samples, sr), media_type="audio/wav",
                     headers={"X-Line": str(line.n), "X-Synth-Seconds": f"{time.time() - t0:.2f}"})
 
@@ -535,14 +572,9 @@ def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = F
         raise HTTPException(400, "אין שורות בסיפור")
     voices = cast_of(cast, speakers)
     names = {c["id"]: c["name"] for c in characters()}
-    safe = re.sub(r"[^\w֐-׿\- ]", "", title).strip()[:60] or "סיפור"
-    folder = out_dir() / f"{safe} {time.strftime('%Y-%m-%d %H-%M')}"
-    job_id = uuid.uuid4().hex[:8]
-    JOBS[job_id] = {"state": "running", "done": 0, "total": len(lines), "folder": str(folder), "current": "",
-                    "warnings": errors}
-
-    # group consecutive lines into scenes ("# title" rows); lines before the first title form an opening scene
-    scenes: list[tuple[str, list]] = []
+    safe = safe_name(title, "סיפור")
+    folder = new_folder(title, "סיפור")
+    scenes: list[tuple[str, list]] = []  # consecutive lines grouped by "# title" rows
     for line in lines:
         name = line.scene or "פתיחה"
         if not scenes or scenes[-1][0] != name:
@@ -557,15 +589,14 @@ def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = F
             for line in scene_lines:
                 job["current"] = f"{scene_name} · {line.speaker}: {line.text[:30]}"
                 samples, sr = story.render_line(line_synth(voices[line.speaker]), line, speed)
-                dur = len(samples) / sr
-                cue = f"{line.speaker}: {line.text}"
+                dur, cue = len(samples) / sr, f"{line.speaker}: {line.text}"
                 scene_srt.append(f"{len(scene_srt) + 1}\n{srt_time(st)} --> {srt_time(st + dur)}\n{cue}\n")
                 srt.append(f"{len(srt) + 1}\n{srt_time(t + st)} --> {srt_time(t + st + dur)}\n{cue}\n")
                 audio += [samples, story.silence(gap, sr)]
                 st += dur + gap
                 job["done"] += 1
             scene_audio = np.concatenate(audio)
-            base = f"{si:02d} - {re.sub(r'[^\w֐-׿\- ]', '', scene_name)[:50]}"
+            base = f"{si:02d} - {safe_name(scene_name, 'סצנה', 50)}"
             write_mp3(folder / "סצנות" / f"{base}.mp3", scene_audio, sr, title=scene_name, artist=title)
             (folder / "סצנות" / f"{base}.srt").write_text("\n".join(scene_srt), encoding="utf-8")
             m3u += [f"#EXTINF:{round(st)},{scene_name}", f"סצנות/{base}.mp3"]
@@ -574,21 +605,19 @@ def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = F
         write_mp3(folder / f"{safe} - מלא.mp3", np.concatenate(full), sr, title=title)
         (folder / "כתוביות - מלא.srt").write_text("\n".join(srt), encoding="utf-8")
         (folder / "playlist.m3u8").write_text("\n".join(m3u) + "\n", encoding="utf-8")
-        job["scenes"] = len(scenes)
         cast_txt = "\n".join(f"{s}: {names.get(v, v)}" for s, v in voices.items())
         (folder / "תסריט.txt").write_text(f"{title}\n\nליהוק:\n{cast_txt}\n\n{script}\n", encoding="utf-8")
-        job["full"] = str(folder / f"{safe} - מלא.mp3")
+        job.update(scenes=len(scenes), full=str(folder / f"{safe} - מלא.mp3"))
 
-    run_job(job_id, work)
-    return {"job": job_id, **JOBS[job_id]}
+    return {"job": run_job({"total": len(lines), "folder": str(folder), "warnings": errors}, work)}
 
 
-# --- settings: models for this computer, external LLM, colours ---
+# --- settings ---
 
 _HW = None
 
 
-def hardware():
+def hardware() -> dict:
     global _HW
     if _HW is None:
         _HW = cfg.scan()
@@ -597,7 +626,8 @@ def hardware():
 
 @app.get("/api/settings")
 def get_settings():
-    return {"settings": cfg.public(SETTINGS), "providers": cfg.PROVIDERS, "version": cfg.VERSION}
+    return {"settings": cfg.public(SETTINGS), "providers": cfg.PROVIDERS, "version": cfg.VERSION,
+            "output_default": str(paths.OUTPUT_DEFAULT), "output_dir": str(out_dir())}
 
 
 @app.get("/api/system")
@@ -609,33 +639,70 @@ def system():
 @app.post("/api/settings")
 def set_settings(data: str = Form(...)):
     """Merge the posted sections; reload only the engines whose settings changed."""
-    global tts, nakdan, _asr
-    new = json.loads(data)
+    global tts, _asr
+    try:
+        new = json.loads(data)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "הגדרות לא תקינות") from None
     old = json.loads(json.dumps(SETTINGS))
     for section in ("app", "models", "llm", "theme"):
         if isinstance(new.get(section), dict):
-            SETTINGS[section].update(new[section])
-    key = SETTINGS["llm"].get("api_key", "")
-    if key.startswith("••••"):  # the browser only ever sees the masked key: keep the saved one
+            SETTINGS[section].update({k: v for k, v in new[section].items() if k in SETTINGS[section]})
+    if SETTINGS["llm"].get("api_key", "").startswith("••••"):  # the browser only sees the masked key
         SETTINGS["llm"]["api_key"] = old["llm"]["api_key"]
+    out = SETTINGS["app"]["output_dir"].strip()
+    if out and not Path(out).expanduser().is_dir():
+        SETTINGS["app"]["output_dir"] = old["app"]["output_dir"]
+        raise HTTPException(400, "התיקייה לא קיימת")
     reloaded = []
     m, o = SETTINGS["models"], old["models"]
-    if SETTINGS["app"]["threads"] != old["app"]["threads"]:
+    threads_changed = SETTINGS["app"]["threads"] != old["app"]["threads"]
+    if threads_changed:
         apply_threads()
-        o = {**o, "tts_precision": None}  # rebuild the speech engine with the new thread count
-    if m["tts_precision"] != o["tts_precision"] and tts is not None:
+    if tts is not None and (threads_changed or m["tts_precision"] != o["tts_precision"]):
         with _tts_lock:
             tts = load_tts(m["tts_precision"])
         reloaded.append("הקראה")
-    if m["nikud"] != o["nikud"] and nakdan is not None:
-        nakdan = load_nakdan(m["nikud"])
-        reloaded.append("ניקוד")
     if m["asr"] != o["asr"] or m["asr_device"] != o["asr_device"]:
         with _asr_lock:
             _asr = None  # loads on next use
         reloaded.append("תמלול")
     cfg.save(SETTINGS)
-    return {"ok": True, "reloaded": reloaded, "settings": cfg.public(SETTINGS)}
+    return {"ok": True, "reloaded": reloaded, "settings": cfg.public(SETTINGS), "output_dir": str(out_dir())}
+
+
+@app.post("/api/pick-folder")
+def pick_folder():
+    return {"path": cfg.pick_folder(str(out_dir()))}
+
+
+@app.post("/api/benchmark")
+def benchmark():
+    """Measure speech speed with different core counts on this computer; the UI offers the fastest."""
+    engines()  # models must be installed
+    cores = hardware()["cores"]
+    counts = sorted({n for n in (1, 2, 4, 6, 8, cores) if n <= cores})
+    text = add_nikud("המחקר עוסק בשפה העברית המודרנית, והוא פורסם בכתבי עת רבים בשנים האחרונות.")
+    style = style_of("noa")
+
+    def work(job):
+        job["results"] = []
+        try:
+            for i, n in enumerate(counts):
+                job["current"] = f"{n} ליבות"
+                os.environ["ORT_NUM_THREADS"] = str(n)
+                t = load_tts(SETTINGS["models"]["tts_precision"])
+                t.synthesize(text, style=style, normalize_text=False)  # warm-up
+                t0 = time.time()
+                for _ in range(2):
+                    s, sr = t.synthesize(text, style=style, normalize_text=False)
+                job["results"].append({"threads": n, "x_realtime": round(len(s) / sr / ((time.time() - t0) / 2), 1)})
+                job["done"] = i + 1
+        finally:
+            apply_threads()
+        job["best"] = max(job["results"], key=lambda r: r["x_realtime"])["threads"]
+
+    return {"job": run_job({"total": len(counts)}, work)}
 
 
 @app.get("/api/update/check")
@@ -643,7 +710,7 @@ def update_check():
     try:
         return cfg.check_update(SETTINGS["app"]["update_repo"], cfg.VERSION)
     except RuntimeError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
 
 
 @app.get("/api/models/search")
@@ -651,29 +718,10 @@ def models_search(task: str = "", q: str = ""):
     return {"results": cfg.search_models(task, hardware().get("ram_gb") or 8, q)}
 
 
-@app.post("/api/models/download")
-def download_model(model: str = Form(...)):
-    if model not in cfg.DOWNLOADS:
-        raise HTTPException(400, "המודל הזה לא זמין להורדה מכאן")
-    repo, folder = cfg.DOWNLOADS[model]
-    job_id = uuid.uuid4().hex[:8]
-    JOBS[job_id] = {"state": "running", "done": 0, "total": 1, "current": repo, "folder": ""}
-
-    def work(job):
-        from huggingface_hub import snapshot_download
-
-        snapshot_download(repo, local_dir=str(MODELS / folder))
-        job["done"] = 1
-
-    run_job(job_id, work)
-    return {"job": job_id}
-
-
-def llm_args(provider: str, base_url: str, api_key: str):
+def llm_args(provider: str, base_url: str, api_key: str) -> tuple[str, str, str]:
     if not api_key or api_key.startswith("••••"):
         api_key = SETTINGS["llm"]["api_key"] if provider == SETTINGS["llm"]["provider"] else ""
-    if not base_url:
-        base_url = cfg.PROVIDERS.get(provider, {}).get("base_url", "")
+    base_url = base_url or cfg.PROVIDERS.get(provider, {}).get("base_url", "")
     if not base_url:
         raise HTTPException(400, "חסרה כתובת שרת")
     return provider, base_url, api_key
@@ -684,7 +732,7 @@ def llm_models(provider: str = Form(...), base_url: str = Form(""), api_key: str
     try:
         return {"models": cfg.list_models(*llm_args(provider, base_url, api_key))}
     except RuntimeError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
 
 
 @app.post("/api/llm/test")
@@ -693,9 +741,9 @@ def llm_test(provider: str = Form(...), base_url: str = Form(""), api_key: str =
     try:
         reply, secs = cfg.timed(cfg.chat, p, b, k, model, "ענה במשפט אחד בעברית: מה תפקידו של ניקוד בעברית?")
     except RuntimeError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
     except (KeyError, IndexError):
-        raise HTTPException(400, "השרת ענה בפורמט לא צפוי")
+        raise HTTPException(400, "השרת ענה בפורמט לא צפוי") from None
     return {"reply": reply.strip(), "seconds": secs}
 
 
@@ -704,36 +752,25 @@ def llm_detect():
     return {"found": cfg.detect_local()}
 
 
-@app.get("/api/file")
-def get_file(path: str):
-    p = Path(path).resolve()
-    if not allowed_path(p) or p.is_dir():
-        raise HTTPException(400, "נתיב לא מורשה")
-    return FileResponse(p)
-
-
 # --- transcription ---
 
 @app.post("/api/transcribe")
-def transcribe(media: UploadFile = File(...)):
+def transcribe(media: UploadFile = File(...)):  # noqa: B008
     raw = save_upload(media)
     t0 = time.time()
     try:
         segs, info = transcribe_any(str(raw), language="he", beam_size=5, vad_filter=True)
-        segs = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
     finally:
         raw.unlink(missing_ok=True)
-
-    def ts(x):
-        h, m, s = int(x // 3600), int(x % 3600 // 60), x % 60
-        return f"{h:02d}:{m:02d}:{s:06.3f}".replace(".", ",")
-
-    srt = "\n".join(f"{i}\n{ts(s['start'])} --> {ts(s['end'])}\n{s['text']}\n" for i, s in enumerate(segs, 1))
-    return {"text": " ".join(s["text"] for s in segs), "srt": srt, "segments": segs,
+    rows = [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segs]
+    srt = "\n".join(f"{i}\n{srt_time(s['start'])} --> {srt_time(s['end'])}\n{s['text']}\n" for i, s in enumerate(rows, 1))
+    return {"text": " ".join(s["text"] for s in rows), "srt": srt, "segments": rows,
             "audio_seconds": info.duration, "took_seconds": time.time() - t0}
 
 
 def main(port: int = 8765):
+    apply_threads()
+    clean_tmp()
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 

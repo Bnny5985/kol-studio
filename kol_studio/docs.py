@@ -49,9 +49,9 @@ def _from_pdf(path: Path) -> str:
             text = page.extract_text(extraction_mode="layout") or ""
         except Exception:
             text = page.extract_text() or ""
-        lines = [re.sub(r"\s{2,}", " ", l.strip()) for l in text.splitlines() if l.strip()]
+        lines = [re.sub(r"\s{2,}", " ", ln.strip()) for ln in text.splitlines() if ln.strip()]
         if _is_visual_order(" ".join(lines)):  # decided per page: one-word lines have no clue of their own
-            lines = [_fix_rtl_line(l) for l in lines]
+            lines = [_fix_rtl_line(ln) for ln in lines]
         if lines:
             out.append(f"# עמוד {i}\n" + _join_wrapped(lines))
     return "\n\n".join(out)
@@ -60,12 +60,12 @@ def _from_pdf(path: Path) -> str:
 def _join_wrapped(lines: list[str]) -> str:
     """PDF lines are hard-wrapped: join them, keep a break after sentence ends."""
     paras, cur = [], []
-    for l in lines:
-        if not cur and len(l.split()) <= 6 and not re.search(r"[.!?,:;״\"]$", l):
-            paras.append(l)  # a short line with no end mark at a paragraph start reads as a heading
+    for ln in lines:
+        if not cur and len(ln.split()) <= 6 and not re.search(r"[.!?,:;״\"]$", ln):
+            paras.append(ln)  # a short line with no end mark at a paragraph start reads as a heading
             continue
-        cur.append(l)
-        if re.search(r"[.!?:״\"]$", l):
+        cur.append(ln)
+        if re.search(r"[.!?:״\"]$", ln):
             paras.append(" ".join(cur))
             cur = []
     if cur:
@@ -192,7 +192,7 @@ def extract(path: Path) -> str:
     else:  # .txt, .md, .srt …
         t = path.read_text("utf-8", "ignore")
         if ext == ".srt":
-            t = "\n".join(l for l in t.splitlines() if l.strip() and not l.strip().isdigit() and "-->" not in l)
+            t = "\n".join(ln for ln in t.splitlines() if ln.strip() and not ln.strip().isdigit() and "-->" not in ln)
         if ext == ".md":
             t = re.sub(r"^#{1,6}\s*", "# ", t, flags=re.M)
     return re.sub(r"\n{3,}", "\n\n", t).strip()
@@ -217,8 +217,8 @@ def split_parts(text: str, max_chars: int = 1200) -> list[dict]:
 
     for block in re.split(r"\n\s*\n", text):  # a blank line separates paragraphs
         body = []
-        for line in block.splitlines():
-            line = line.strip()
+        for raw in block.splitlines():
+            line = raw.strip()
             if line.startswith("# "):
                 if body:
                     paras.append(" ".join(body))
@@ -241,15 +241,17 @@ SENT_END = re.compile(r"(?<=[.!?…:;])\s+(?=\S)")
 def split_sentences(text: str, max_chars: int = 220) -> list[str]:
     out = []
     for para in re.split(r"\n+", text):
-        for s in SENT_END.split(para.strip()):
-            s = s.strip()
-            while len(s) > max_chars:  # cut very long sentences at a comma near the limit
-                cut = s.rfind(",", 0, max_chars)
-                cut = cut if cut > 40 else s.rfind(" ", 0, max_chars)
-                out.append(s[: cut + 1].strip())
-                s = s[cut + 1 :].strip()
-            if s and HEB.search(s) or (s and re.search(r"\w", s)):
-                out.append(s)
+        for raw in SENT_END.split(para.strip()):
+            rest = raw.strip()
+            while len(rest) > max_chars:  # cut very long sentences at a comma (or a space) near the limit
+                cut = rest.rfind(",", 0, max_chars)
+                cut = cut if cut > 40 else rest.rfind(" ", 0, max_chars)
+                if cut <= 0:
+                    cut = max_chars
+                out.append(rest[: cut + 1].strip())
+                rest = rest[cut + 1:].strip()
+            if re.search(r"\w", rest):
+                out.append(rest)
     return out
 
 

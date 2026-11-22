@@ -1,50 +1,78 @@
-"""First-run model download. Models are not inside the installer (several GB); they come from Hugging Face."""
+"""Model packs: what the app downloads from Hugging Face, where it goes, and how to tell it is installed.
+
+Models are not inside the installer (several GB). The first-run screen downloads the required packs; the
+Settings page downloads the optional ones.
+"""
 import fnmatch
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import paths
 
-# id: (repo, file patterns, destination folder under MODELS, required?, Hebrew label, approx size)
+
+@dataclass(frozen=True)
+class Pack:
+    repo: str
+    patterns: tuple[str, ...]
+    dest: str  # folder under paths.MODELS ("" = the models folder itself)
+    check: str  # a file whose presence means the pack is installed
+    required: bool
+    name: str
+    size: str
+
+
 PACKS = {
-    "speech": ("notmax123/BlueV3-onnx",
-               ["onnx/*", "voices/*", "frontend/renikud/*", "LICENSES.md", "LICENSE.OpenRAIL-M"],
-               "bluev3", True, "הקראה ושכפול קול (BlueV3)", "2.0GB"),
-    "nikud": ("Phonikud/phonikud-onnx", ["phonikud-1.0.int8.onnx", "README.md"], "", True, "ניקוד (Phonikud)", "0.3GB"),
-    "asr": ("ivrit-ai/whisper-large-v3-turbo-ct2", ["*"], "ivrit-turbo-ct2", False, "תמלול (ivrit.ai)", "1.6GB"),
+    "speech": Pack("notmax123/BlueV3-onnx",
+                   ("onnx/*", "voices/*", "frontend/renikud/*", "LICENSES.md", "LICENSE.OpenRAIL-M"),
+                   "bluev3", "bluev3/onnx/vector_estimator.int8.onnx", True, "הקראה ושכפול קול (BlueV3)", "2.0GB"),
+    "nikud": Pack("Phonikud/phonikud-onnx", ("phonikud-1.0.int8.onnx", "README.md"),
+                  "", "phonikud-1.0.int8.onnx", True, "ניקוד (Phonikud)", "0.3GB"),
+    "asr": Pack("ivrit-ai/whisper-large-v3-turbo-ct2", ("*",),
+                "ivrit-turbo-ct2", "ivrit-turbo-ct2/model.bin", False, "תמלול מהיר (ivrit.ai turbo)", "1.6GB"),
+    "asr-large": Pack("ivrit-ai/whisper-large-v3-ct2", ("*",),
+                      "ivrit-large-ct2", "ivrit-large-ct2/model.bin", False, "תמלול מדויק (ivrit.ai large-v3)", "3.1GB"),
 }
 
-CHECK = {  # a file whose presence means the pack is installed
-    "speech": "bluev3/onnx/vector_estimator.int8.onnx",
-    "nikud": "phonikud-1.0.int8.onnx",
-    "asr": "ivrit-turbo-ct2/model.bin",
-}
+ASR_PACK = {"ivrit-turbo": "asr", "ivrit-large": "asr-large"}  # transcription model setting -> pack
+
+
+def installed(pack_id: str) -> bool:
+    return (paths.MODELS / PACKS[pack_id].check).exists()
 
 
 def status() -> list[dict]:
-    return [{"id": k, "name": v[4], "size": v[5], "required": v[3], "installed": (paths.MODELS / CHECK[k]).exists()}
-            for k, v in PACKS.items()]
+    return [{"id": k, "name": p.name, "size": p.size, "required": p.required, "installed": installed(k)}
+            for k, p in PACKS.items() if k != "asr-large"]  # the large model is offered in Settings only
 
 
 def ready() -> bool:
-    return all(p["installed"] for p in status() if p["required"])
+    return all(installed(k) for k, p in PACKS.items() if p.required)
+
+
+def asr_dir(model: str) -> Path:
+    """Folder of the chosen transcription model, falling back to the fast one when it is missing."""
+    pack = PACKS[ASR_PACK.get(model, "asr")]
+    if not installed(ASR_PACK.get(model, "asr")):
+        pack = PACKS["asr"]
+    return paths.MODELS / pack.dest
 
 
 def download(pack_ids: list[str], job: dict):
-    """Download packs file by file; job["done"]/["total"] are bytes for the progress bar."""
+    """Download packs file by file; job["done"] / job["total"] count bytes for the progress bar."""
     from huggingface_hub import HfApi, hf_hub_download
 
     api = HfApi()
     plan = []
     for pid in pack_ids:
-        repo, patterns, dest, *_ = PACKS[pid]
-        info = api.model_info(repo, files_metadata=True)
-        for s in info.siblings:
-            if any(fnmatch.fnmatch(s.rfilename, p) for p in patterns):
-                plan.append((pid, repo, s.rfilename, s.size or 0, paths.MODELS / dest if dest else paths.MODELS))
-    job["total"] = sum(p[3] for p in plan) or 1
+        p = PACKS[pid]
+        dest = paths.MODELS / p.dest if p.dest else paths.MODELS
+        for s in api.model_info(p.repo, files_metadata=True).siblings:
+            if any(fnmatch.fnmatch(s.rfilename, pat) for pat in p.patterns):
+                plan.append((p, s.rfilename, s.size or 0, dest))
+    job["total"] = sum(size for _, _, size, _ in plan) or 1
     job["done"] = 0
-    for pid, repo, fname, size, dest in plan:
-        job["current"] = f"{PACKS[pid][4]} · {Path(fname).name}"
+    for p, fname, size, dest in plan:
+        job["current"] = f"{p.name} · {Path(fname).name}"
         if not (dest / fname).exists():
-            hf_hub_download(repo, fname, local_dir=str(dest))
+            hf_hub_download(p.repo, fname, local_dir=str(dest))
         job["done"] += size

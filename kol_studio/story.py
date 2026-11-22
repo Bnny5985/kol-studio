@@ -257,7 +257,7 @@ def silence(seconds: float, sr: int) -> np.ndarray:
     return np.zeros(int(seconds * sr), dtype=np.float32)
 
 
-def render_text(synth, text: str, style_name: str, emphasis: bool, base_speed: float, sr_hint: int = 44100):
+def render_text(synth, text: str, style_name: str, emphasis: bool, base_speed: float):
     """synth(pointed_text, speed) -> (samples, sr). Returns (samples, sr)."""
     st = STYLES.get(style_name, STYLES["רגיל"])
     text = text.strip()
