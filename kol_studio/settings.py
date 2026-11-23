@@ -16,7 +16,7 @@ from . import models_setup, paths
 FILE = paths.SETTINGS_FILE  # stays on this computer; holds the API key in plain text
 
 VERSION = "0.1.0"
-UPDATE_REPO = ""  # "owner/name" of the GitHub repository; set when the repository exists
+UPDATE_REPO = "Bnny5985/kol-studio"  # GitHub repository whose releases the app checks for updates
 
 DEFAULTS = {
     "app": {"update_repo": UPDATE_REPO, "check_updates_on_start": True, "threads": 0, "output_dir": "",

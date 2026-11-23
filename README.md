@@ -1,10 +1,17 @@
 <div dir="rtl">
 
-# קול־סטודיו
+<p align="center"><img src="docs/icon.png" width="96" alt=""></p>
+
+<h1 align="center">קול־סטודיו</h1>
+
+<p align="center"><a href="https://github.com/Bnny5985/kol-studio/releases/latest"><b>⬇ הורדה למק ולווינדוס</b></a> · <a href="docs/GUIDE.md"><b>📖 מדריך למשתמש</b></a></p>
 
 תוכנה בעברית ליצירת קול: ניקוד, הקראה, שכפול קול, סיפורים עם כמה דמויות, קורא מסמכים עם טלפרומפטר, ותמלול. **הכל רץ על המחשב שלך**, עם מודלים שנבנו במקור לעברית.
 
 מיועדת ללימודים אקדמיים ולשימוש פרטי. קוד פתוח ברישיון MIT.
+
+<p align="center"><img src="docs/screenshots/02-nikud.png" width="49%" alt="ניקוד והקראה"> <img src="docs/screenshots/03-reader.png" width="49%" alt="קורא מסמכים"></p>
+<p align="center"><img src="docs/screenshots/04-story.png" width="49%" alt="סיפור עם דמויות"> <img src="docs/screenshots/09-settings-performance.png" width="49%" alt="הגדרות"></p>
 
 ## מה אפשר לעשות
 
@@ -23,12 +30,14 @@
 
 ## התקנה
 
-הורידו את קובץ ההתקנה מדף ה־[Releases](../../releases):
+הורידו את קובץ ההתקנה מדף ה־[Releases](https://github.com/Bnny5985/kol-studio/releases):
 
 - **מק (Apple Silicon):** `KolStudio-…-mac-arm64.dmg`. פותחים וגוררים לתיקיית Applications. התוכנה לא חתומה בחתימת מפתח של אפל, ולכן בפתיחה הראשונה צריך ללחוץ עליה **בכפתור ימני ← פתח**.
 - **ווינדוס 10/11:** `KolStudio-…-windows-x64-setup.exe`.
 
 בהפעלה הראשונה התוכנה מורידה את המודלים לעברית, כ־2.3GB, ועוד 1.6GB אם בוחרים גם בתמלול. אחר כך היא עובדת בלי אינטרנט.
+
+**איך מתחילים?** הסבר מלא עם צילומי מסך נמצא ב־[מדריך למשתמש](docs/GUIDE.md).
 
 ## פיתוח
 

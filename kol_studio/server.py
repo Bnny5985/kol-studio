@@ -167,11 +167,12 @@ def add_nikud(text: str) -> str:
     """Numbers/dates -> words, then nikud. Lines that are already pointed are kept as they are."""
     out = []
     for line in text.split("\n"):
-        if not line.strip() or docs.is_pointed(line):
-            out.append(line)
+        head, body = ("# ", line.lstrip()[2:]) if line.lstrip().startswith("# ") else ("", line)  # keep part titles
+        if not body.strip() or docs.is_pointed(body):
+            out.append(head + body)
         else:
-            norm = prepare_text_for_synthesis(line, lang="he", mark_slow=False)
-            out.append(PHONETIC_MARKS.sub("", engines()[1].add_diacritics(norm)))
+            norm = prepare_text_for_synthesis(body, lang="he", mark_slow=False)
+            out.append(head + PHONETIC_MARKS.sub("", engines()[1].add_diacritics(norm)))
     return "\n".join(out)
 
 

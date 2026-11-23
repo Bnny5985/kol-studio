@@ -212,3 +212,11 @@ def test_speech_without_models_gives_clear_message(server, tmp_path, monkeypatch
     with pytest.raises(HTTPException) as e:
         server.synth("שָׁלוֹם", "noa", 1.0)
     assert e.value.status_code == 409
+
+
+def test_nikud_keeps_part_titles(server, monkeypatch):
+    fake = SimpleNamespace(add_diacritics=lambda t: t + "ַ")
+    monkeypatch.setattr(server, "engines", lambda: (None, fake))
+    out = server.add_nikud("# פתיחה\nשלום")
+    assert out.splitlines()[0].startswith("# ") and len(docs.split_parts(out)) == 1
+    assert docs.split_parts(out)[0]["title"].startswith("פתיחה")
