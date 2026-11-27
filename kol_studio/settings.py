@@ -15,7 +15,7 @@ from . import models_setup, paths
 
 FILE = paths.SETTINGS_FILE  # stays on this computer; holds the API key in plain text
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 UPDATE_REPO = "Bnny5985/kol-studio"  # GitHub repository whose releases the app checks for updates
 
 DEFAULTS = {

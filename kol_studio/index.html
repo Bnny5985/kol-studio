@@ -406,6 +406,7 @@
     <button class="chip" data-go="setWork">ביצועים ושמירה</button>
     <button class="chip" data-go="setSearch">חיפוש מודלים</button>
     <button class="chip" data-go="setLlm">מודל שפה</button>
+    <button class="chip" data-go="setMcp">סוכני AI</button>
     <button class="chip" data-go="setLook">עיצוב</button>
     <button class="chip" data-go="setUpdates">עדכונים</button>
   </div></div>
@@ -498,6 +499,19 @@
     </div>
     <div id="llmReply" class="reply" style="display:none"></div>
     <div class="hint" style="margin-top:10px">המפתח נשמר רק במחשב הזה, ונשלח רק לשרת שבחרת.</div>
+  </div>
+
+  <div class="card" id="setMcp">
+    <h2>חיבור לסוכני AI (MCP)</h2>
+    <div class="sub">סוכני AI כמו Antigravity, ‏Claude או Cursor יכולים להשתמש בקול־סטודיו: לנקד, להקריא, לייצא, להפיק סיפורים, לתמלל וליצור דמויות. הכל נשאר במחשב שלך.</div>
+    <div class="row">
+      <button class="btn" id="mcpAg">הוסף ל־Antigravity</button>
+      <button class="btn sec" id="mcpCopy">העתק הגדרות MCP</button>
+      <button class="btn sec" id="mcpPrompt">העתק פרומפט לסוכן</button>
+      <span class="status" id="mcpStatus"></span>
+    </div>
+    <pre id="mcpJson" dir="ltr" style="margin-top:12px;text-align:left;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px"></pre>
+    <div class="hint" id="mcpHint"></div>
   </div>
 
   <div class="card" id="setLook">
@@ -606,7 +620,7 @@ function showTab(id) {
   $(id).classList.add("on");
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
-$("gear").onclick = () => { showTab("settings"); loadSystem(); };
+$("gear").onclick = () => { showTab("settings"); loadSystem(); loadMcp(); };
 
 /* ================= theme ================= */
 const FONTS = {
@@ -876,6 +890,35 @@ $("llmTest").onclick = async () => {
 $("llmSave").onclick = async () => {
   try { await saveSettings({ llm: { ...llmFields(), model: $("llmModel").value.trim() } }); $("llmKey").value = SET.llm.api_key; setStatus("llmStatus", "נשמר", "ok"); }
   catch (e) { setStatus("llmStatus", e.message, "err"); }
+};
+
+/* --- MCP (AI agents) --- */
+const MCP_PROMPT = `יש לך גישה לשרת MCP בשם kol-studio — קול־סטודיו, תוכנת קול בעברית שרצה על המחשב שלי.
+1. הפעל את kol_status ו־list_characters כדי לבדוק שהחיבור עובד ולראות את הקולות.
+2. כשאני מבקש להקריא טקסט בעברית: השתמש ב־add_nikud, הראה לי את הניקוד, ואז speak עם auto_nikud=false.
+3. לסיפור עם כמה דמויות: קרא קודם ל־story_directions, כתוב תסריט בפורמט שלו, ואז render_story עם cast.
+4. למסמך שלם: export_audio_folder עם file_path. למשימות ארוכות בדוק job_status.
+5. לתמלול: transcribe. לפתיחת תיקיית תוצאות: open_folder.
+6. אל תשכפל קול (clone_voice) בלי שאישרתי שיש הסכמה של בעל הקול.
+דבר איתי בעברית. התחל בבדיקת החיבור.`;
+let MCP = null;
+async function loadMcp() {
+  try {
+    MCP = await getJSON("/api/mcp/info");
+    $("mcpJson").textContent = JSON.stringify(MCP.config, null, 2);
+    $("mcpAg").disabled = !MCP.antigravity_present;
+    $("mcpAg").textContent = MCP.antigravity_installed ? "עדכן ב־Antigravity ✓" : "הוסף ל־Antigravity";
+    $("mcpHint").textContent = MCP.antigravity_present
+      ? `קובץ ההגדרות של Antigravity: ${MCP.antigravity_config}. אחרי ההוספה: ב־Antigravity פתח MCP Servers ← Refresh, או הפעל אותו מחדש.`
+      : "Antigravity לא נמצא במחשב. אפשר להעתיק את ההגדרות לכל תוכנה שתומכת ב־MCP.";
+  } catch (e) { setStatus("mcpStatus", e.message, "err"); }
+}
+const copyText = async (text, msg) => { try { await navigator.clipboard.writeText(text); toast(msg); } catch { toast("ההעתקה נכשלה — סמן והעתק ידנית"); } };
+$("mcpCopy").onclick = () => copyText(JSON.stringify(MCP?.config || {}, null, 2), "ההגדרות הועתקו ✓");
+$("mcpPrompt").onclick = () => copyText(MCP_PROMPT, "הפרומפט הועתק ✓");
+$("mcpAg").onclick = async () => {
+  try { const j = await (await api("/api/mcp/install-antigravity")).json(); setStatus("mcpStatus", "נוסף ל־Antigravity ✓ (נשמר גיבוי של הקובץ הקודם)", "ok"); loadMcp(); }
+  catch (e) { setStatus("mcpStatus", e.message, "err"); }
 };
 
 /* --- updates --- */

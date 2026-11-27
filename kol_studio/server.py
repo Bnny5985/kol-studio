@@ -31,7 +31,7 @@ from phonikud_onnx import Phonikud
 from renikud_onnx import G2P
 from scipy.signal import resample_poly
 
-from . import docs, models_setup, paths, story
+from . import docs, latin, models_setup, paths, story
 from . import settings as cfg
 
 BUNDLE = paths.MODELS / "bluev3"
@@ -213,7 +213,13 @@ def synth(pointed_text: str, character: str, speed: float) -> tuple[np.ndarray, 
     engine = engines()[0]  # first: a clear message when the models are not installed yet
     style = style_of(character)
     with _tts_lock:
-        samples, sr = engine.synthesize(pointed_text, lang="he", speed=speed, style=style, normalize_text=False)
+        try:
+            samples, sr = engine.synthesize(pointed_text, lang="he", speed=speed, style=style, normalize_text=False)
+        except RuntimeError as e:  # English words without the English G2P (no polyg2p build for this system)
+            if "polyg2p" not in str(e) or not latin.has_latin(pointed_text):
+                raise
+            samples, sr = engine.synthesize(latin.to_hebrew(pointed_text), lang="he", speed=speed, style=style,
+                                            normalize_text=False)
     track_rate(pointed_text, len(samples) / sr, speed)
     return samples, sr
 
@@ -672,6 +678,46 @@ def set_settings(data: str = Form(...)):
     return {"ok": True, "reloaded": reloaded, "settings": cfg.public(SETTINGS), "output_dir": str(out_dir())}
 
 
+ANTIGRAVITY_CONFIG = Path.home() / ".gemini" / "config" / "mcp_config.json"
+
+
+def mcp_entry() -> dict:
+    """How an AI client starts the Kol Studio MCP server on this computer."""
+    if getattr(sys, "frozen", False):
+        name = "kolstudio-mcp.exe" if sys.platform.startswith("win") else "kolstudio-mcp"
+        return {"command": str(Path(sys.executable).with_name(name)), "args": []}
+    root = Path(__file__).resolve().parent.parent
+    return {"command": sys.executable, "args": ["-m", "kol_studio.mcp_server"], "cwd": str(root)}
+
+
+@app.get("/api/mcp/info")
+def mcp_info():
+    entry = mcp_entry()
+    installed = False
+    with contextlib.suppress(OSError, ValueError):
+        installed = "kol-studio" in json.loads(ANTIGRAVITY_CONFIG.read_text()).get("mcpServers", {})
+    return {"entry": entry, "config": {"mcpServers": {"kol-studio": entry}},
+            "antigravity_config": str(ANTIGRAVITY_CONFIG), "antigravity_installed": installed,
+            "antigravity_present": ANTIGRAVITY_CONFIG.parent.is_dir()}
+
+
+@app.post("/api/mcp/install-antigravity")
+def mcp_install_antigravity():
+    """Add (or update) the kol-studio entry in Antigravity's MCP config. Other servers are kept; a backup is saved."""
+    if not ANTIGRAVITY_CONFIG.parent.is_dir():
+        raise HTTPException(400, "Antigravity לא נמצא במחשב הזה")
+    data = {}
+    if ANTIGRAVITY_CONFIG.exists():
+        try:
+            data = json.loads(ANTIGRAVITY_CONFIG.read_text() or "{}")
+        except ValueError:
+            raise HTTPException(400, "קובץ ההגדרות של Antigravity לא תקין — לא שיניתי אותו") from None
+        ANTIGRAVITY_CONFIG.with_name("mcp_config.backup.json").write_text(ANTIGRAVITY_CONFIG.read_text())
+    data.setdefault("mcpServers", {})["kol-studio"] = mcp_entry()
+    ANTIGRAVITY_CONFIG.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    return {"ok": True, "path": str(ANTIGRAVITY_CONFIG)}
+
+
 @app.post("/api/pick-folder")
 def pick_folder():
     return {"path": cfg.pick_folder(str(out_dir()))}
@@ -772,7 +818,13 @@ def transcribe(media: UploadFile = File(...)):  # noqa: B008
 def main(port: int = 8765):
     apply_threads()
     clean_tmp()
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    paths.SERVER_FILE.write_text(json.dumps({"port": port, "pid": os.getpid(), "version": cfg.VERSION}))
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    finally:
+        with contextlib.suppress(OSError):
+            if json.loads(paths.SERVER_FILE.read_text()).get("pid") == os.getpid():
+                paths.SERVER_FILE.unlink()
 
 
 if __name__ == "__main__":

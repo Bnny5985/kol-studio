@@ -25,6 +25,7 @@ CHARS = DATA / "characters"
 CHARS_DELETED = DATA / "characters_deleted"
 TMP = DATA / "tmp"
 SETTINGS_FILE = DATA / "settings.json"
+SERVER_FILE = DATA / "server.json"  # port of the running engine, read by the MCP server
 OUTPUT_DEFAULT = Path.home() / "Documents" / APP_NAME
 
 # index.html: next to this file in development, inside the bundle when frozen (PyInstaller)

@@ -220,3 +220,27 @@ def test_nikud_keeps_part_titles(server, monkeypatch):
     out = server.add_nikud("# פתיחה\nשלום")
     assert out.splitlines()[0].startswith("# ") and len(docs.split_parts(out)) == 1
     assert docs.split_parts(out)[0]["title"].startswith("פתיחה")
+
+
+def test_latin_fallback_spells_acronyms_and_transliterates():
+    from kol_studio import latin
+
+    assert latin.to_hebrew("דרך MCP.") == "דרך אֶם סִי פִּי."
+    out = latin.to_hebrew("עם Whisper בתוך")
+    assert not latin.has_latin(out) and out.startswith("עם ו")
+    assert latin.to_hebrew("בלי אנגלית") == "בלי אנגלית"
+
+
+def test_mcp_server_exposes_the_tools():
+    import asyncio
+
+    pytest.importorskip("mcp")
+    from kol_studio import mcp_server
+
+    names = {t.name for t in asyncio.run(mcp_server.mcp.list_tools())}
+    assert {"kol_status", "list_characters", "add_nikud", "speak", "render_story", "transcribe", "clone_voice"} <= names
+
+
+def test_mcp_entry_points_at_this_python_in_development(server):
+    entry = server.mcp_entry()
+    assert entry["args"] == ["-m", "kol_studio.mcp_server"] and entry["command"]
