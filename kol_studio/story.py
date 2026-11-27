@@ -157,6 +157,41 @@ def _add_text(pieces: list, chunk: str, style: str):
         pieces.append(Piece("text", value=p.strip("*").strip() if emph else p.strip(), style=style, emphasis=emph))
 
 
+# ---------- Fish S2-Pro: directions become the model's own inline tags ----------
+
+FISH_STYLE = {
+    "רגיל": "", "שמחה": "[happy]", "התרגשות": "[excited]", "עצב": "[sad]", "כעס": "[angry]", "פחד": "[scared]",
+    "רוגע": "[calm]", "הפתעה": "[surprised]", "לחישה": "[whisper]", "צעקה": "[shouting]", "שקט": "[low volume]",
+    "איטי": "[speaking slowly]", "מהיר": "[speaking fast]", "קול עמוק": "[low voice]", "קול גבוה": "[pitch up]",
+}
+FISH_EVENT = {"נשימה": "[inhale]", "אנחה": "[sigh]", "צחוק": "[laughing]", "צחקוק": "[chuckle]", "היסוס": "[hesitating]",
+              "מממ": "[hmm]", "בכי": "[crying]"}
+
+
+def fish_segments(line: "Line") -> list[tuple[str, object]]:
+    """The line as Fish input: ("text", tagged text) pieces separated by ("pause", seconds) for exact pauses."""
+    out, buf, style = [], [], None
+    for p in line.pieces:
+        if p.kind == "pause":
+            if buf:
+                out.append(("text", " ".join(buf)))
+                buf, style = [], None
+            out.append(("pause", p.seconds))
+            continue
+        if p.kind == "event":
+            buf.append(FISH_EVENT[p.value])
+            continue
+        if p.style != style:
+            tag = FISH_STYLE.get(p.style, "")
+            if tag:
+                buf.append(tag)
+            style = p.style
+        buf.append(f"[emphasis] {p.value}" if p.emphasis else p.value)
+    if buf:
+        out.append(("text", " ".join(buf)))
+    return out
+
+
 # ---------- audio effects ----------
 
 def pitch_shift_keep_length(samples: np.ndarray, semitones: float) -> np.ndarray:

@@ -244,3 +244,16 @@ def test_mcp_server_exposes_the_tools():
 def test_mcp_entry_points_at_this_python_in_development(server):
     entry = server.mcp_entry()
     assert entry["args"] == ["-m", "kol_studio.mcp_server"] and entry["command"]
+
+
+def test_fish_segments_map_directions_to_tags():
+    lines, _, _ = story.parse("@א [שמחה]: שלום [צחוק] [הפסקה 0.5] [לחישה] *בשקט* עכשיו")
+    segs = story.fish_segments(lines[0])
+    assert segs[0] == ("text", "[happy] שלום [laughing]")
+    assert segs[1] == ("pause", 0.5)
+    assert segs[2][0] == "text" and segs[2][1].startswith("[whisper]") and "[emphasis] בשקט" in segs[2][1]
+
+
+def test_fish_nikud_keeps_tags(server, monkeypatch):
+    monkeypatch.setattr(server, "add_nikud", lambda t: t.replace("שלום", "שָׁלוֹם"))
+    assert server.nikud_keep_tags("[laughing] שלום [whisper]") == "[laughing] שָׁלוֹם [whisper]"

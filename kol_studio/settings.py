@@ -11,11 +11,11 @@ import time
 import urllib.error
 import urllib.request
 
-from . import models_setup, paths
+from . import fish_engine, models_setup, paths
 
 FILE = paths.SETTINGS_FILE  # stays on this computer; holds the API key in plain text
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 UPDATE_REPO = "Bnny5985/kol-studio"  # GitHub repository whose releases the app checks for updates
 
 DEFAULTS = {
@@ -124,8 +124,8 @@ def catalogue(hw: dict, current: dict) -> list[dict]:
          "עברית במקור. הכי מהיר במעבד רגיל"),
         ("tts", "bluev3-fp32", "BlueV3 · fp32 (מדויק)", "0.8GB", 6, "speech", "tts_precision", "fp32",
          "אותו מודל בדיוק מלא, איטי בכ־20%"),
-        ("tts", "fish-s2-he", "Fish-Audio S2 Pro · עברית", "~10GB", 24, None, None, None,
-         "עברית במקור, רגשות מובנים. עוד לא חובר"),
+        ("tts", "fish-s2-he", "Fish-Audio S2 Pro · עברית", fish_engine.SIZE, 24, None, None, None,
+         "רגשות ותגיות מובנים, שכפול מדויק. איטי (כ־5× מזמן אמת ב־M1). רישיון: לשימוש לא מסחרי בלבד"),
         ("nikud", "phonikud", "Phonikud", "0.3GB", 2, "nikud", None, None, "מבוסס Dicta. 20/20 בבדיקה, 52ms למשפט"),
         ("asr", "ivrit-turbo", "ivrit.ai Whisper turbo", "1.6GB", 8, "asr", "asr", "ivrit-turbo",
          "מהיר. 2–6.5% שגיאות בבדיקה"),
@@ -139,8 +139,10 @@ def catalogue(hw: dict, current: dict) -> list[dict]:
     out = []
     for cat, mid, name, size, min_ram, pack, key, value, note in rows:
         out.append({"category": cat, "id": mid, "name": name, "size": size, "min_ram": min_ram, "fits": ram >= min_ram,
-                    "pack": pack, "installed": models_setup.installed(pack) if pack else None,
-                    "available": pack is not None or cat == "llm", "setting": key, "value": value, "note": note,
+                    "pack": pack, "installed": (models_setup.installed(pack) if pack else
+                                                fish_engine.installed() if mid == "fish-s2-he" else None),
+                    "engine": "fish" if mid == "fish-s2-he" else None,
+                    "available": pack is not None or cat == "llm" or mid == "fish-s2-he", "setting": key, "value": value, "note": note,
                     "active": key is not None and m.get(key) == value, "recommended": best[cat] == mid})
     return out
 

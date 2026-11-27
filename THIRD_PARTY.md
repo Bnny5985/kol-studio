@@ -12,6 +12,7 @@
 | מילון אנגלית של polyg2p | מילים באנגלית בתוך טקסט עברי | BSD (נגזר מ־CMU Pronouncing Dictionary) | |
 | [Phonikud](https://huggingface.co/Phonikud/phonikud-onnx) | ניקוד | ראו את דף המודל | מבוסס על מודל הניקוד של [Dicta](https://huggingface.co/dicta-il) |
 | [ivrit.ai Whisper](https://huggingface.co/ivrit-ai) | תמלול | ראו את דף המודל | מבוסס Whisper של OpenAI (MIT) |
+| [Fish Audio S2-Pro](https://huggingface.co/fishaudio/s2-pro) + [התוספת העברית](https://huggingface.co/notmax123/Fish-Audio-S2-Pro-He) · מנוע אופציונלי | הקראה עם רגשות | **Fish Audio Research License** | מחקר ושימוש לא מסחרי בלבד. מותקן רק אחרי אישור המשתמש, ולא נכלל בקובצי ההתקנה. "This model is licensed under the Fish Audio Research License, Copyright © 39 AI, INC. All Rights Reserved." **Built with Fish Audio.** |
 
 ## ספריות קוד
 
@@ -24,6 +25,8 @@
 | FastAPI, Uvicorn, pywebview, psutil | MIT / BSD |
 | MCP Python SDK (Model Context Protocol) | MIT |
 | polyg2p (מילים באנגלית בתוך עברית; נכלל במק בלבד) | Apache-2.0 |
+| קוד Fish Speech (fork של maxmelichov, מורד בהתקנת המנוע האופציונלי) | Fish Audio Research License |
+| uv (מכין את סביבת המנוע האופציונלי) | MIT / Apache-2.0 |
 | NumPy, SciPy, librosa, soundfile | BSD / ISC |
 | PyAV (כולל ספריות FFmpeg) | BSD (PyAV), LGPL (FFmpeg) |
 | num2words, soxr | LGPL-2.1 (נטענות כספריות נפרדות) |

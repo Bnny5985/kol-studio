@@ -31,7 +31,7 @@ from phonikud_onnx import Phonikud
 from renikud_onnx import G2P
 from scipy.signal import resample_poly
 
-from . import docs, latin, models_setup, paths, story
+from . import docs, fish_engine, latin, models_setup, paths, story
 from . import settings as cfg
 
 BUNDLE = paths.MODELS / "bluev3"
@@ -348,13 +348,71 @@ def nikud(text: str = Form(...)):
     return {"text": add_nikud(text), "ms": int((time.time() - t0) * 1000)}
 
 
+# --- Fish S2-Pro (optional engine) ---
+
+TAG = re.compile(r"(\[[^\]]+\])")
+RENIKUD = BUNDLE / "frontend" / "renikud" / "model.onnx"
+
+
+def nikud_keep_tags(text: str) -> str:
+    """Nikud for the Hebrew parts only; [tags] (Fish emotion tags) pass through untouched."""
+    return "".join(part if TAG.fullmatch(part) else add_nikud(part) for part in TAG.split(text))
+
+
+def fish_ref(char_id: str) -> tuple[Path, str]:
+    """A reference recording + its text for a character, so Fish speaks in the same voice as BlueV3:
+    the original recording for cloned voices, a BlueV3 sample of the voice otherwise (made once, cached)."""
+    voice_payload(char_id)  # validates the id
+    cdir = CHARS / char_id
+    if (cdir / "reference.wav").exists() and (cdir / "reference_text.txt").exists():
+        text = (cdir / "reference_text.txt").read_text(encoding="utf-8").strip()
+        if text:
+            return cdir / "reference.wav", text
+    fish_engine.REFS.mkdir(parents=True, exist_ok=True)
+    ref = fish_engine.REFS / f"{char_id}.wav"
+    if not ref.exists():
+        samples, sr = synth(fish_engine.REF_TEXT, char_id, 1.0)
+        sf.write(ref, samples, sr, subtype="PCM_16")
+    return ref, fish_engine.REF_TEXT
+
+
+def fish_synth(text: str, character: str) -> tuple[np.ndarray, int]:
+    engines()  # BlueV3 is needed for the voice references and the shared Hebrew G2P model
+    ref, ref_text = fish_ref(character)
+    out = paths.TMP / f"fish_{uuid.uuid4().hex}.wav"
+    try:
+        fish_engine.synth(text, out, RENIKUD, ref, ref_text)
+        samples, sr = sf.read(out, dtype="float32")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from None
+    finally:
+        out.unlink(missing_ok=True)
+    return samples, sr
+
+
+def render_line(line, voice: str, speed: float, engine: str) -> tuple[np.ndarray, int]:
+    if engine != "fish":
+        return story.render_line(line_synth(voice), line, speed)
+    parts, sr = [], 44100
+    for kind, value in story.fish_segments(line):
+        if kind == "pause":
+            parts.append(story.silence(value, sr))
+        else:
+            samples, sr = fish_synth(nikud_keep_tags(value), voice)
+            parts.append(samples)
+    return (np.concatenate(parts) if parts else story.silence(0.1, sr)), sr
+
+
 @app.post("/api/speak")
 def speak(text: str = Form(...), character: str = Form("noa"), speed: float = Form(1.0),
-          auto_nikud: bool = Form(False)):
+          auto_nikud: bool = Form(False), engine: str = Form("blue")):
     if not text.strip():
         raise HTTPException(400, "אין טקסט")
     t0 = time.time()
-    samples, sr = synth(add_nikud(text) if auto_nikud else text, character, speed)
+    if engine == "fish":
+        samples, sr = fish_synth(nikud_keep_tags(text) if auto_nikud else text, character)
+    else:
+        samples, sr = synth(add_nikud(text) if auto_nikud else text, character, speed)
     return Response(wav_bytes(samples, sr), media_type="audio/wav",
                     headers={"X-Synth-Seconds": f"{time.time() - t0:.2f}", "X-Audio-Seconds": f"{len(samples) / sr:.2f}"})
 
@@ -559,21 +617,22 @@ def story_parse(script: str = Form(...)):
 
 
 @app.post("/api/story/line")
-def story_line(script: str = Form(...), row: int = Form(...), cast: str = Form("{}"), speed: float = Form(1.0)):
+def story_line(script: str = Form(...), row: int = Form(...), cast: str = Form("{}"), speed: float = Form(1.0),
+               engine: str = Form("blue")):
     lines, speakers, _ = story.parse(script)
     if not lines:
         raise HTTPException(400, "אין שורות בסיפור")
     # the line the cursor is on, or the closest one above it
     line = max((ln for ln in lines if ln.row <= row), key=lambda ln: ln.row, default=lines[0])
     t0 = time.time()
-    samples, sr = story.render_line(line_synth(cast_of(cast, speakers)[line.speaker]), line, speed)
+    samples, sr = render_line(line, cast_of(cast, speakers)[line.speaker], speed, engine)
     return Response(wav_bytes(samples, sr), media_type="audio/wav",
                     headers={"X-Line": str(line.n), "X-Synth-Seconds": f"{time.time() - t0:.2f}"})
 
 
 @app.post("/api/story/render")
 def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = Form("סיפור"),
-                 speed: float = Form(1.0), gap: float = Form(0.35)):
+                 speed: float = Form(1.0), gap: float = Form(0.35), engine: str = Form("blue")):
     lines, speakers, errors = story.parse(script)
     if not lines:
         raise HTTPException(400, "אין שורות בסיפור")
@@ -595,7 +654,7 @@ def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = F
             audio, scene_srt, st = [], [], 0.0
             for line in scene_lines:
                 job["current"] = f"{scene_name} · {line.speaker}: {line.text[:30]}"
-                samples, sr = story.render_line(line_synth(voices[line.speaker]), line, speed)
+                samples, sr = render_line(line, voices[line.speaker], speed, engine)
                 dur, cue = len(samples) / sr, f"{line.speaker}: {line.text}"
                 scene_srt.append(f"{len(scene_srt) + 1}\n{srt_time(st)} --> {srt_time(st + dur)}\n{cue}\n")
                 srt.append(f"{len(srt) + 1}\n{srt_time(t + st)} --> {srt_time(t + st + dur)}\n{cue}\n")
@@ -635,6 +694,35 @@ def hardware() -> dict:
 def get_settings():
     return {"settings": cfg.public(SETTINGS), "providers": cfg.PROVIDERS, "version": cfg.VERSION,
             "output_default": str(paths.OUTPUT_DEFAULT), "output_dir": str(out_dir())}
+
+
+@app.get("/api/engines")
+def engines_status():
+    return {"blue": {"installed": models_setup.ready()}, "fish": fish_engine.status()}
+
+
+@app.post("/api/engines/fish/install")
+def fish_install(accept_license: bool = Form(False)):
+    if not accept_license:
+        raise HTTPException(400, "צריך לאשר את רישיון Fish Audio Research (לשימוש לא מסחרי בלבד)")
+    if any(j["state"] == "running" and j.get("kind") == "fish-install" for j in JOBS.values()):
+        raise HTTPException(409, "ההתקנה כבר רצה")
+    return {"job": run_job({"kind": "fish-install", "current": "מתחיל…"}, fish_engine.install)}
+
+
+@app.post("/api/engines/fish/start")
+def fish_start():
+    if not fish_engine.installed():
+        raise HTTPException(400, "מנוע Fish לא מותקן")
+    engines()
+    fish_engine.warm_up(RENIKUD)
+    return fish_engine.status()
+
+
+@app.delete("/api/engines/fish")
+def fish_remove():
+    fish_engine.uninstall()
+    return {"ok": True}
 
 
 @app.get("/api/system")

@@ -216,6 +216,9 @@
   .preview-tp { background: var(--stage); border-radius: var(--radius); padding: 14px 20px; font: 650 22px/1.6 var(--font); }
   .preview-tp .a { color: var(--stage-done); } .preview-tp .b { color: var(--stage-now); } .preview-tp .c { color: var(--stage-ink); }
   .reply { background: var(--field); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 12px; }
+  .fish-only, .fish-hint { display: none; }
+  body.has-fish .fish-only { display: inline-flex; gap: 6px; align-items: center; }
+  body.has-fish.fish-on .fish-hint { display: block; margin-top: 8px; }
   details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-top: 12px; }
 </style>
 </head>
@@ -261,10 +264,12 @@
     <textarea id="pointed" class="nikud"></textarea>
     <div class="row">
       <label>דמות</label><select id="voice"></select>
+      <span class="fish-only"><label>מנוע</label> <select id="engine"><option value="blue">BlueV3 · מהיר</option><option value="fish">Fish S2-Pro · רגשות, איטי</option></select></span>
       <label>מהירות</label><input type="number" id="speed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:84px">
       <button class="btn" id="doSpeak">הקרא ▶</button>
       <span class="status" id="speakStatus"></span>
     </div>
+    <div class="hint fish-hint" id="fishHint">ב־Fish אפשר לכתוב תגיות רגש באנגלית בסוגריים בתוך הטקסט, למשל <b dir="ltr">[laughing]</b>, <b dir="ltr">[whisper]</b>, <b dir="ltr">[sad]</b>, <b dir="ltr">[shouting]</b>. ההקראה הראשונה טוענת את המודל (כדקה וחצי).</div>
     <audio id="player" controls></audio>
     <div class="row"><a id="dl" download="hakraa.wav" style="display:none">⬇ הורד קובץ WAV</a></div>
   </div>
@@ -335,6 +340,7 @@
           <span class="spacer"></span>
           <label>מהירות כללית</label><input type="number" id="stSpeed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:80px">
           <label>רווח בין שורות</label><input type="number" id="stGap" value="0.35" min="0" max="3" step="0.05" style="width:80px">
+          <span class="fish-only"><label>מנוע</label> <select id="stEngine"><option value="blue">BlueV3 · מהיר</option><option value="fish">Fish S2-Pro · רגשות, איטי</option></select></span>
         </div>
       </div>
     </div>
@@ -572,6 +578,20 @@
   <div class="status" id="setupStatus"></div>
   <div class="row"><button class="btn" id="setupGo">הורד והתחל</button></div>
 </dialog>
+<dialog id="fishLic">
+  <h2 style="margin-top:0">התקנת מנוע Fish Audio S2-Pro</h2>
+  <div class="sub">מנוע הקראה עם רגשות ותגיות מובנים ושכפול קול מדויק. גודל ההתקנה כ־13GB. במק עם M1 הוא איטי בערך פי 5 מזמן אמת.</div>
+  <div class="reply">
+    <b>רישיון Fish Audio Research</b> — מותר לשימוש <b>מחקרי ולא מסחרי בלבד</b> (לימודים, שימוש אישי, תחביב).
+    שימוש מסחרי (מכירה, משחק שמכניס כסף, שירות בתשלום) מחייב רישיון בתשלום מ־Fish Audio.
+    מי שמפיץ תוכן שנוצר בו צריך לציין: "Built with Fish Audio".
+    <div style="margin-top:6px"><a id="fishLicLink" href="#" target="_blank" rel="noopener">לקריאת הרישיון המלא</a></div>
+  </div>
+  <div class="row"><label><input type="checkbox" id="fishAccept"> קראתי ואני מסכים לרישיון Fish Audio Research</label></div>
+  <progress id="fishProg" value="0" max="100" style="width:100%;display:none;margin-top:10px"></progress>
+  <div class="status" id="fishStatus"></div>
+  <div class="row"><button class="btn" id="fishGo" disabled>התקן</button><button class="btn sec" id="fishClose">סגור</button></div>
+</dialog>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -620,7 +640,7 @@ function showTab(id) {
   $(id).classList.add("on");
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
-$("gear").onclick = () => { showTab("settings"); loadSystem(); loadMcp(); };
+$("gear").onclick = async () => { showTab("settings"); await loadEngines(); loadSystem(); loadMcp(); };
 
 /* ================= theme ================= */
 const FONTS = {
@@ -722,6 +742,22 @@ function modelRow(m) {
   const mn = el("div", "mn", m.name); mn.append(el("small", "", `${m.size} · ${m.note}`)); row.append(mn);
   if (m.recommended) row.append(el("span", "badge ok", "מומלץ למחשב שלך"));
   if (!m.fits) row.append(el("span", "badge warn", `דורש ${m.min_ram}GB זיכרון`));
+  if (m.engine === "fish") {
+    const st = ENGINES?.fish || {};
+    if (!m.installed) { const b = el("button", "btn sec small", `התקן (${m.size})`); b.onclick = openFishInstall; row.append(b); }
+    else {
+      const names = { stopped: "מותקן · לא טעון", loading: "טוען…", ready: "מוכן ✓", busy: "עובד…", error: "שגיאה" };
+      row.append(el("span", "badge" + (st.status === "ready" ? " ok" : st.status === "error" ? " warn" : ""), names[st.status] || "מותקן"));
+      if (st.status === "stopped" || st.status === "error") { const b = el("button", "btn sec small", "טען עכשיו"); b.onclick = startFish; row.append(b); }
+      const rm = el("button", "btn sec small", "הסר");
+      rm.onclick = async () => {
+        if (!confirm("להסיר את מנוע Fish? זה מוחק כ־13GB מהמחשב. אפשר להתקין שוב בכל זמן.")) return;
+        await fetch("/api/engines/fish", { method: "DELETE" }); await loadEngines(); loadSystem();
+      };
+      row.append(rm);
+    }
+    return row;
+  }
   if (!m.available) row.append(el("span", "badge", "בקרוב"));
   else if (m.pack && !m.installed) {
     const b = el("button", "btn sec small", `הורד (${m.size})`); b.onclick = () => downloadPack(m.pack, b); row.append(b);
@@ -745,6 +781,39 @@ document.querySelectorAll("#asrDev .chip").forEach(b => b.onclick = async () => 
   document.querySelectorAll("#asrDev .chip").forEach(x => x.classList.toggle("on", x === b));
   await saveSettings({ models: { asr_device: b.dataset.v } });
 });
+
+/* --- Fish engine --- */
+let ENGINES = null;
+async function loadEngines() {
+  try { ENGINES = await getJSON("/api/engines"); } catch { ENGINES = null; }
+  const has = !!ENGINES?.fish?.installed;
+  document.body.classList.toggle("has-fish", has);
+  if (!has) { $("engine").value = "blue"; $("stEngine").value = "blue"; }
+  document.body.classList.toggle("fish-on", has && $("engine").value === "fish");
+}
+$("engine").onchange = () => document.body.classList.toggle("fish-on", $("engine").value === "fish");
+function openFishInstall() {
+  $("fishLicLink").href = ENGINES?.fish?.license_url || "#";
+  $("fishAccept").checked = false; $("fishGo").disabled = true; setStatus("fishStatus", "");
+  $("fishLic").showModal();
+}
+$("fishAccept").onchange = () => $("fishGo").disabled = !$("fishAccept").checked;
+$("fishClose").onclick = () => $("fishLic").close();
+$("fishGo").onclick = async () => {
+  $("fishGo").disabled = true; $("fishAccept").disabled = true; $("fishProg").style.display = "";
+  try {
+    const { job } = await (await api("/api/engines/fish/install", { accept_license: true })).json();
+    await pollJob(job, s => { $("fishProg").value = s.done; setStatus("fishStatus", `${Math.round(s.done)}% · ${s.current}`); }, 2000);
+    setStatus("fishStatus", "המנוע הותקן ✓", "ok"); await loadEngines(); loadSystem();
+  } catch (e) { setStatus("fishStatus", e.message + " — אפשר ללחוץ שוב, ההתקנה תמשיך מאיפה שעצרה", "err"); $("fishGo").disabled = false; }
+  finally { $("fishAccept").disabled = false; }
+};
+async function startFish() {
+  try { await api("/api/engines/fish/start"); toast("טוען את מנוע Fish… (כדקה וחצי)");
+        const t = setInterval(async () => { await loadEngines(); if (["ready", "error"].includes(ENGINES?.fish?.status)) { clearInterval(t); loadSystem(); } }, 3000);
+        loadSystem(); }
+  catch (e) { toast(e.message); }
+}
 
 /* --- performance & saving --- */
 function fillWork() {
@@ -1017,7 +1086,10 @@ $("doSpeak").onclick = async () => {
   if (text.length > 3000 && !confirm("הטקסט ארוך. לייצוא מסמך שלם עדיף 'צור תיקייה'. להקריא בכל זאת?")) return;
   $("doSpeak").disabled = true; setStatus("speakStatus", "מקריא…");
   try {
-    const r = await api("/api/speak", { text, character: $("voice").value, speed: $("speed").value, auto_nikud: true });
+    const engine = $("engine").value;
+    if (engine === "fish" && ENGINES?.fish?.status !== "ready") setStatus("speakStatus", "מקריא ב־Fish… בפעם הראשונה המודל נטען, כדקה וחצי");
+    const r = await api("/api/speak", { text, character: $("voice").value, speed: $("speed").value, auto_nikud: true, engine });
+    loadEngines();
     $("dl").href = setAudio($("player"), await r.blob()); $("player").play(); $("dl").style.display = "";
     setStatus("speakStatus", `${r.headers.get("X-Audio-Seconds")} שניות שמע ב־${r.headers.get("X-Synth-Seconds")} שניות`, "ok");
   } catch (e) { setStatus("speakStatus", e.message, "err"); } finally { $("doSpeak").disabled = false; }
@@ -1248,7 +1320,7 @@ $("stLine").onclick = async () => {
   const ta = $("stScript"), row = ta.value.slice(0, ta.selectionStart).split("\n").length;
   $("stLine").disabled = true; setStatus("stStatus", "מקריא את השורה…");
   try {
-    const r = await api("/api/story/line", { script: ta.value, row, cast: JSON.stringify(stCast), speed: $("stSpeed").value });
+    const r = await api("/api/story/line", { script: ta.value, row, cast: JSON.stringify(stCast), speed: $("stSpeed").value, engine: $("stEngine").value });
     $("stPlayer").style.display = ""; setAudio($("stPlayer"), await r.blob()); $("stPlayer").play();
     setStatus("stStatus", `שורה ${r.headers.get("X-Line")} · ${r.headers.get("X-Synth-Seconds")} שניות`, "ok");
   } catch (e) { setStatus("stStatus", e.message, "err"); } finally { $("stLine").disabled = false; }
@@ -1259,7 +1331,7 @@ $("stRender").onclick = async () => {
   $("stRender").disabled = true; $("stOpen").style.display = "none"; $("stFiles").textContent = ""; $("stProg").style.display = "";
   try {
     const { job } = await (await api("/api/story/render", { script: $("stScript").value, cast: JSON.stringify(stCast), title,
-      speed: $("stSpeed").value, gap: $("stGap").value })).json();
+      speed: $("stSpeed").value, gap: $("stGap").value, engine: $("stEngine").value })).json();
     const s = await pollJob(job, s => { $("stProg").max = s.total; $("stProg").value = s.done; setStatus("stStatus", `${s.done}/${s.total} · ${s.current}`); });
     setStatus("stStatus", `הסיפור מוכן · ${s.scenes} סצנות · ${s.total} שורות`, "ok");
     $("stPlayer").style.display = ""; setAudio($("stPlayer"), "/api/file?path=" + encodeURIComponent(s.full));
@@ -1371,6 +1443,7 @@ $("setupGo").onclick = async () => {
 /* ================= start ================= */
 (async () => {
   await loadSettings().catch(e => toast(e.message));
+  loadEngines();
   if (!(await checkSetup())) return;
   await loadChars();
   await loadPalette(); await parseStory(); estimateDoc();

@@ -35,7 +35,11 @@ Tips:
 - For stories call story_directions to learn the script format and the available directions.
 - Long jobs (export_audio_folder, render_story) may return a job_id: poll job_status until it is done.
 - Results are saved as files on the user's computer; tools return their paths.
-- Only clone a voice when the user confirms they own it or have the speaker's consent."""
+- Only clone a voice when the user confirms they own it or have the speaker's consent.
+- Two speech engines: engine="blue" (default, fast) and engine="fish" (Fish Audio S2-Pro: natural emotions, free-form
+  English tags inside the text like [laughing] [whisper] [sad] [shouting] [sigh]; ~5x slower than real time; the first
+  call loads the model for ~1.5 min). Fish is licensed for research and non-commercial use only — tell the user if the
+  project might be commercial. kol_status shows whether Fish is installed."""
 
 mcp = MCPServer(name="kol-studio", title="קול־סטודיו", instructions=INSTRUCTIONS, version=VERSION)
 
@@ -182,7 +186,10 @@ def kol_status() -> dict:
     """Kol Studio status: version, whether the Hebrew models are installed, the output folder and the voice count.
     סטטוס קול־סטודיו."""
     st, s = get("api/setup/status"), get("api/settings")
+    fish = get("api/engines")["fish"]
     return {"engine": engine(), "version": s["version"], "models_ready": st["ready"],
+            "fish_engine": {"installed": fish["installed"], "status": fish["status"],
+                            "license": "Fish Audio Research License: research and non-commercial use only"},
             "models": {p["id"]: p["installed"] for p in st["packs"]}, "output_dir": s["output_dir"],
             "characters": len(get("api/characters"))}
 
@@ -202,12 +209,16 @@ def add_nikud(text: str) -> str:
 
 
 @mcp.tool()
-def speak(text: str, character: str = "noa", speed: float = 1.0, auto_nikud: bool = True, file_name: str = "") -> dict:
+def speak(text: str, character: str = "noa", speed: float = 1.0, auto_nikud: bool = True, file_name: str = "",
+          engine: str = "blue") -> dict:
     """Read Hebrew text aloud in a character's voice and save a WAV file. Returns the file path and duration.
     auto_nikud=false when the text already has the exact nikud you want (speech follows the nikud).
-    speed: 0.6–1.6. הקראת טקסט בקול של דמות."""
+    speed: 0.6–1.6 (BlueV3 only). engine: "blue" (fast) or "fish" (emotions; put English tags like [laughing] or
+    [whisper] inside the text; slow; non-commercial license). הקראת טקסט בקול של דמות."""
+    if engine not in ("blue", "fish"):
+        raise ToolError('engine must be "blue" or "fish"')
     body, headers = _call("POST", "api/speak", {"text": text, "character": _voice(character), "speed": speed,
-                                                "auto_nikud": str(auto_nikud).lower()})
+                                                "auto_nikud": str(auto_nikud).lower(), "engine": engine}, timeout=1800)
     name = (re.sub(r"[^\w֐-׿\- ]", "", file_name).strip() or _stamp(text)) + ".wav"
     out = _out_dir("MCP") / name
     out.write_bytes(body)
@@ -261,16 +272,17 @@ def story_directions() -> dict:
 
 @mcp.tool()
 def render_story(script: str, cast: dict[str, str] | None = None, title: str = "סיפור", speed: float = 1.0,
-                 gap: float = 0.35) -> dict:
+                 gap: float = 0.35, engine: str = "blue") -> dict:
     """Produce a multi-character story: full MP3, one MP3 + SRT subtitles per scene, full subtitles, playlist.
     cast maps each speaker name in the script to a character id or name (missing speakers get default voices).
+    engine "fish" turns the stage directions into Fish's own emotion tags (slower, non-commercial license).
     הפקת סיפור עם כמה דמויות."""
     resolved = {speaker: _voice(v) for speaker, v in (cast or {}).items()}
     check = post("api/story/parse", {"script": script})
     if not check["lines"]:
         raise ToolError("The script has no lines. " + " · ".join(check["errors"]))
     job = post("api/story/render", {"script": script, "cast": json.dumps(resolved, ensure_ascii=False), "title": title,
-                                    "speed": speed, "gap": gap})
+                                    "speed": speed, "gap": gap, "engine": engine})
     result = _wait(job["job"], limit=160)
     result["script_warnings"] = check["errors"]
     return result

@@ -1,6 +1,6 @@
 [project]
 name = "kol-studio"
-version = "0.2.0"
+version = "0.3.0"
 description = "Hebrew voice studio: nikud, speech, voice characters, stories, documents and transcription — local models first"
 license = "MIT"
 readme = "README.md"
