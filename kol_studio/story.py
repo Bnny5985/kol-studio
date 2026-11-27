@@ -57,6 +57,7 @@ EVENTS = {
 }
 
 PAUSE_RE = re.compile(r"^הפסקה\s*([\d.]+)\s*(?:ש(?:ניות|')?|s)?$")
+SFX_RE = re.compile(r"^(אפקט|רקע)\s*:\s*(.+)$")  # [אפקט: רעם] plays a sound there; [רקע: גשם] loops under the scene
 TAG_RE = re.compile(r"\[([^\]]+)\]")
 LINE_RE = re.compile(r"^@\s*([^:\[\]]+?)\s*(?:\[([^\]]+)\])?\s*:\s*(.*)$")
 
@@ -68,6 +69,10 @@ def catalogue() -> dict:
     for name, e in EVENTS.items():
         groups.setdefault(e["group"], []).append({"name": name, "kind": "event", "desc": e["desc"], "insert": e.get("insert", f"[{name}]")})
     groups["הדגשה"] = [{"name": "הדגשת מילה", "kind": "emphasis", "desc": "סמן מילה ואז לחץ: *מילה*", "insert": "**"}]
+    groups["אפקטים קוליים"] = [
+        {"name": "אפקט", "kind": "sfx", "desc": "צליל במקום הזה: שם של צליל שלך או מהספרייה", "insert": "[אפקט: ]"},
+        {"name": "רקע", "kind": "bg", "desc": "צליל רקע בלולאה מכאן עד סוף הסצנה, למשל [רקע: גשם]", "insert": "[רקע: ]"},
+    ]
     return groups
 
 
@@ -75,7 +80,7 @@ def catalogue() -> dict:
 
 @dataclass
 class Piece:
-    kind: str  # "text" | "pause" | "event"
+    kind: str  # "text" | "pause" | "event" | "sfx" | "bg"
     value: str = ""
     seconds: float = 0.0
     style: str = "רגיל"
@@ -132,8 +137,10 @@ def _pieces(text: str, row: int) -> tuple[list[Piece], list[str]]:
     for m in TAG_RE.finditer(text):
         _add_text(pieces, text[pos:m.start()], style)
         tag = m.group(1).strip()
-        pm = PAUSE_RE.match(tag)
-        if tag in STYLES:
+        pm, sm = PAUSE_RE.match(tag), SFX_RE.match(tag)
+        if sm:
+            pieces.append(Piece("sfx" if sm.group(1) == "אפקט" else "bg", value=sm.group(2).strip()))
+        elif tag in STYLES:
             style = tag
         elif pm:
             pieces.append(Piece("pause", seconds=min(float(pm.group(1)), 10.0)))
@@ -177,6 +184,12 @@ def fish_segments(line: "Line") -> list[tuple[str, object]]:
                 out.append(("text", " ".join(buf)))
                 buf, style = [], None
             out.append(("pause", p.seconds))
+            continue
+        if p.kind in ("sfx", "bg"):
+            if buf:
+                out.append(("text", " ".join(buf)))
+                buf, style = [], None
+            out.append((p.kind, p.value))
             continue
         if p.kind == "event":
             buf.append(FISH_EVENT[p.value])
@@ -313,9 +326,16 @@ def render_text(synth, text: str, style_name: str, emphasis: bool, base_speed: f
     return samples, sr
 
 
-def render_line(synth, line: Line, base_speed: float = 1.0) -> tuple[np.ndarray, int]:
+def render_line(synth, line: Line, base_speed: float = 1.0, sfx=None) -> tuple[np.ndarray, int]:
+    """sfx(name, sr) -> samples plays a sound effect where [אפקט: name] stands ([רקע: …] is handled per scene)."""
     out, sr = [], 44100
     for i, p in enumerate(line.pieces):
+        if p.kind == "bg":
+            continue
+        if p.kind == "sfx":
+            if sfx is not None:
+                out += [sfx(p.value, sr), silence(0.08, sr)]
+            continue
         if p.kind == "pause":
             out.append(silence(p.seconds, sr))
         elif p.kind == "event":

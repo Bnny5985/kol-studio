@@ -25,13 +25,14 @@ from blue_onnx.style import export_voice_style, style_from_payload
 from blue_onnx.text_norm import prepare_text_for_synthesis
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from faster_whisper import WhisperModel
 from faster_whisper.audio import decode_audio
 from phonikud_onnx import Phonikud
 from renikud_onnx import G2P
 from scipy.signal import resample_poly
 
-from . import docs, fish_engine, latin, models_setup, paths, story
+from . import docs, fish_engine, latin, models_setup, paths, qwen_engine, sfx_engine, sfx_library, story
 from . import settings as cfg
 
 BUNDLE = paths.MODELS / "bluev3"
@@ -62,8 +63,11 @@ def out_dir() -> Path:
     return d
 
 
+EXPORT_DIRS: set[Path] = set()  # folders the user picked for exporting sound effects (may be opened)
+
+
 def allowed_path(p: Path) -> bool:
-    roots = {paths.OUTPUT_DEFAULT.resolve(), out_dir().resolve()}
+    roots = {paths.OUTPUT_DEFAULT.resolve(), out_dir().resolve(), *EXPORT_DIRS}
     return any(p == r or r in p.parents for r in roots)
 
 
@@ -311,6 +315,7 @@ async def lifespan(_app):
 
 
 app = FastAPI(lifespan=lifespan)
+app.mount("/assets", StaticFiles(directory=paths.RESOURCES / "assets"), name="assets")  # fonts and the logo
 
 
 @app.get("/")
@@ -390,13 +395,34 @@ def fish_synth(text: str, character: str) -> tuple[np.ndarray, int]:
     return samples, sr
 
 
+def qwen_synth(text: str, character: str) -> tuple[np.ndarray, int]:
+    engines()  # BlueV3 makes the voice references and holds the shared Hebrew G2P model
+    ref, _ = fish_ref(character)
+    out = paths.TMP / f"qwen_{uuid.uuid4().hex}.wav"
+    try:
+        qwen_engine.synth(text, out, RENIKUD, ref)
+        samples, sr = sf.read(out, dtype="float32")
+    except RuntimeError as e:
+        raise HTTPException(503, str(e)) from None
+    finally:
+        out.unlink(missing_ok=True)
+    return samples, sr
+
+
 def render_line(line, voice: str, speed: float, engine: str) -> tuple[np.ndarray, int]:
-    if engine != "fish":
-        return story.render_line(line_synth(voice), line, speed)
+    chosen = engine_for(voice, engine)
+    if chosen == "qwen":  # no speed control in the model: the story's pitch and voice effects still apply
+        return story.render_line(lambda text, _speed: qwen_synth(add_nikud(text), voice), line, speed, sfx=sfx_clip)
+    if chosen != "fish":
+        return story.render_line(line_synth(voice), line, speed, sfx=sfx_clip)
     parts, sr = [], 44100
     for kind, value in story.fish_segments(line):
         if kind == "pause":
             parts.append(story.silence(value, sr))
+        elif kind == "sfx":
+            parts.append(sfx_clip(value, sr))
+        elif kind == "bg":
+            continue
         else:
             samples, sr = fish_synth(nikud_keep_tags(value), voice)
             parts.append(samples)
@@ -405,12 +431,15 @@ def render_line(line, voice: str, speed: float, engine: str) -> tuple[np.ndarray
 
 @app.post("/api/speak")
 def speak(text: str = Form(...), character: str = Form("noa"), speed: float = Form(1.0),
-          auto_nikud: bool = Form(False), engine: str = Form("blue")):
+          auto_nikud: bool = Form(False), engine: str = Form("auto")):
     if not text.strip():
         raise HTTPException(400, "אין טקסט")
     t0 = time.time()
-    if engine == "fish":
+    chosen = engine_for(character, engine)
+    if chosen == "fish":
         samples, sr = fish_synth(nikud_keep_tags(text) if auto_nikud else text, character)
+    elif chosen == "qwen":
+        samples, sr = qwen_synth(add_nikud(text) if auto_nikud else text, character)
     else:
         samples, sr = synth(add_nikud(text) if auto_nikud else text, character, speed)
     return Response(wav_bytes(samples, sr), media_type="audio/wav",
@@ -488,14 +517,56 @@ def get_file(path: str):
 
 # --- characters ---
 
+VOICE_ENGINES = ("blue", "fish", "qwen")
+ENGINE_NAMES = {"blue": "BlueV3", "fish": "Fish", "qwen": "QwenTTS-he"}
+CHAR_ENGINES = paths.DATA / "character_engines.json"  # which voice model each character speaks with
+
+
+def char_engines() -> dict:
+    try:
+        return json.loads(CHAR_ENGINES.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def engine_for(char_id: str, engine: str = "auto") -> str:
+    """The engine a line is spoken with: the one asked for, or the character's own ("auto")."""
+    if engine in VOICE_ENGINES:
+        if not engine_installed(engine):
+            raise HTTPException(503, f"מנוע {ENGINE_NAMES[engine]} לא מותקן — אפשר להתקין אותו בהגדרות ← מחשב ומודלים")
+        return engine
+    chosen = char_engines().get(char_id, "blue")
+    return chosen if engine_installed(chosen) else "blue"
+
+
+def engine_installed(engine: str) -> bool:
+    return engine == "blue" or {"fish": fish_engine.installed, "qwen": qwen_engine.installed}[engine]()
+
+
 @app.get("/api/characters")
 def characters():
+    eng = char_engines()
     out = [{"id": k, "name": v, "source": "קול מובנה"} for k, v in PRESETS.items()]
     for d in sorted(CHARS.iterdir(), key=lambda p: p.stat().st_mtime):
         m = d / "character.json"
         if m.exists():
             out.append(json.loads(m.read_text()))
+    for c in out:
+        c["engine"] = eng.get(c["id"], "blue")
     return out
+
+
+@app.post("/api/characters/{cid}/engine")
+def set_character_engine(cid: str, engine: str = Form(...)):
+    if engine not in VOICE_ENGINES:
+        raise HTTPException(400, "מודל לא מוכר")
+    voice_payload(cid)  # validates the id
+    if not engine_installed(engine):
+        raise HTTPException(400, f"מנוע {ENGINE_NAMES[engine]} לא מותקן — אפשר להתקין אותו בהגדרות ← מחשב ומודלים")
+    eng = char_engines()
+    eng[cid] = engine
+    CHAR_ENGINES.write_text(json.dumps(eng))
+    return {"ok": True, "engine": engine}
 
 
 def save_character(name: str, payload: dict, meta_extra: dict) -> dict:
@@ -618,7 +689,7 @@ def story_parse(script: str = Form(...)):
 
 @app.post("/api/story/line")
 def story_line(script: str = Form(...), row: int = Form(...), cast: str = Form("{}"), speed: float = Form(1.0),
-               engine: str = Form("blue")):
+               engine: str = Form("auto")):
     lines, speakers, _ = story.parse(script)
     if not lines:
         raise HTTPException(400, "אין שורות בסיפור")
@@ -632,7 +703,7 @@ def story_line(script: str = Form(...), row: int = Form(...), cast: str = Form("
 
 @app.post("/api/story/render")
 def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = Form("סיפור"),
-                 speed: float = Form(1.0), gap: float = Form(0.35), engine: str = Form("blue")):
+                 speed: float = Form(1.0), gap: float = Form(0.35), engine: str = Form("auto")):
     lines, speakers, errors = story.parse(script)
     if not lines:
         raise HTTPException(400, "אין שורות בסיפור")
@@ -651,17 +722,22 @@ def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = F
         (folder / "סצנות").mkdir(parents=True)
         full, srt, m3u, t, sr = [], [], ["#EXTM3U", f"#PLAYLIST:{title}"], 0.0, 44100
         for si, (scene_name, scene_lines) in enumerate(scenes, 1):
-            audio, scene_srt, st = [], [], 0.0
+            audio, scene_srt, st, bg = [], [], 0.0, []
             for line in scene_lines:
+                bg += [(st, p.value) for p in line.pieces if p.kind == "bg"]
                 job["current"] = f"{scene_name} · {line.speaker}: {line.text[:30]}"
                 samples, sr = render_line(line, voices[line.speaker], speed, engine)
                 dur, cue = len(samples) / sr, f"{line.speaker}: {line.text}"
-                scene_srt.append(f"{len(scene_srt) + 1}\n{srt_time(st)} --> {srt_time(st + dur)}\n{cue}\n")
-                srt.append(f"{len(srt) + 1}\n{srt_time(t + st)} --> {srt_time(t + st + dur)}\n{cue}\n")
+                if line.text:  # a row with only [רקע: …] or [אפקט: …] has no subtitle
+                    scene_srt.append(f"{len(scene_srt) + 1}\n{srt_time(st)} --> {srt_time(st + dur)}\n{cue}\n")
+                    srt.append(f"{len(srt) + 1}\n{srt_time(t + st)} --> {srt_time(t + st + dur)}\n{cue}\n")
                 audio += [samples, story.silence(gap, sr)]
                 st += dur + gap
                 job["done"] += 1
             scene_audio = np.concatenate(audio)
+            if bg:
+                job["current"] = f"{scene_name} · מוסיף צלילי רקע"
+                scene_audio = lay_ambience(scene_audio, sr, bg)
             base = f"{si:02d} - {safe_name(scene_name, 'סצנה', 50)}"
             write_mp3(folder / "סצנות" / f"{base}.mp3", scene_audio, sr, title=scene_name, artist=title)
             (folder / "סצנות" / f"{base}.srt").write_text("\n".join(scene_srt), encoding="utf-8")
@@ -676,6 +752,331 @@ def story_render(script: str = Form(...), cast: str = Form("{}"), title: str = F
         job.update(scenes=len(scenes), full=str(folder / f"{safe} - מלא.mp3"))
 
     return {"job": run_job({"total": len(lines), "folder": str(folder), "warnings": errors}, work)}
+
+
+# --- sound effects ---
+
+SFX_DIR_NAME = "אפקטים קוליים"
+SFX_FORMATS = ("wav", "ogg", "mp3")
+
+
+def sfx_root() -> Path:
+    d = out_dir() / SFX_DIR_NAME
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def sfx_default_engine() -> str:
+    pref = SETTINGS["models"].get("sfx_engine", "")
+    ready = [e for e in sfx_engine.ENGINES if sfx_engine.installed(e)]
+    if pref in ready:
+        return pref
+    if not ready:
+        raise HTTPException(400, "אין מנוע אפקטים מותקן. אפשר להתקין אחד בהגדרות ← מחשב ומודלים, או במסך האפקטים")
+    return "sa3" if "sa3" in ready else ready[0]
+
+
+def sfx_meta(wav: Path) -> dict:
+    side = wav.with_suffix(".json")
+    try:
+        m = json.loads(side.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        m = {}
+    info = sf.info(wav) if wav.suffix == ".wav" else None
+    return {"path": str(wav), "name": wav.stem, "label": m.get("label", wav.parent.name), "prompt": m.get("prompt", ""),
+            "engine": m.get("engine", ""), "fav": bool(m.get("fav")), "created": m.get("created", ""),
+            "seconds": round(info.duration, 2) if info else m.get("seconds"), "folder": wav.parent.name,
+            "edited": bool(m.get("edited"))}
+
+
+def sfx_llm():
+    llm = SETTINGS["llm"]
+    if not llm.get("model"):
+        return None
+    try:
+        provider, base, key = llm_args(llm["provider"], llm.get("base_url", ""), llm.get("api_key", ""))
+    except HTTPException:
+        return None
+    return lambda prompt: cfg.chat(provider, base, key, llm["model"], prompt, max_tokens=80)
+
+
+@app.get("/api/sfx/catalogue")
+def sfx_catalogue():
+    return {**sfx_library.catalogue(), "engines": sfx_engine.status(), "llm": bool(SETTINGS["llm"].get("model")),
+            "default_engine": SETTINGS["models"].get("sfx_engine", "")}
+
+
+@app.post("/api/sfx/prompt")
+def sfx_prompt(text: str = Form(...), style: str = Form("")):
+    """Show the English prompt the model will get, before generating (the user may edit it)."""
+    try:
+        prompt, how = sfx_library.to_prompt(text, style, sfx_llm())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return {"prompt": prompt, "how": how}
+
+
+def sfx_generate_files(prompt: str, label: str, engine: str, seconds: float, variants: int, quality: str,
+                       seed: int | None = None, negative: str = "") -> list[Path]:
+    e = sfx_engine.ENGINES[engine]
+    seconds = max(0.5, min(float(seconds), e["max_seconds"]))
+    folder = sfx_root() / safe_name(label, "צליל", 50)
+    folder.mkdir(parents=True, exist_ok=True)
+    taken = {p.stem for p in folder.glob("*.wav")}
+    outs, n = [], 1
+    while len(outs) < variants:
+        stem = f"{safe_name(label, 'צליל', 50)} {n}"
+        if stem not in taken:
+            outs.append(folder / f"{stem}.wav")
+        n += 1
+    seed = int(seed) if seed is not None else int(time.time()) % 100000
+    try:
+        sfx_engine.generate(engine, prompt, seconds, outs, seed, quality, negative)
+    except RuntimeError as ex:
+        raise HTTPException(503, str(ex)) from None
+    for i, o in enumerate(outs):
+        o.with_suffix(".json").write_text(json.dumps(
+            {"label": label, "prompt": prompt, "engine": engine, "seconds": seconds, "seed": seed + i * 1009,
+             "quality": quality, "created": time.strftime("%Y-%m-%d %H:%M"), "fav": False}, ensure_ascii=False),
+            encoding="utf-8")
+    return outs
+
+
+@app.post("/api/sfx/generate")
+def sfx_generate(prompt: str = Form(...), label: str = Form(""), engine: str = Form(""), seconds: float = Form(4.0),
+                 variants: int = Form(2), quality: str = Form("normal"), seed: int | None = Form(None),
+                 negative: str = Form("")):
+    if not prompt.strip():
+        raise HTTPException(400, "אין תיאור לצליל")
+    engine = engine if engine in sfx_engine.ENGINES else sfx_default_engine()
+    if not sfx_engine.installed(engine):
+        raise HTTPException(400, f"{sfx_engine.ENGINES[engine]['name']} לא מותקן")
+    variants = max(1, min(int(variants), 6))
+    label = label.strip() or prompt.strip()[:40]
+
+    def work(job):
+        job.update(total=variants, current=f"מייצר {variants} גרסאות ב־{sfx_engine.ENGINES[engine]['name']}")
+        t0 = time.time()
+        files = sfx_generate_files(prompt.strip(), label, engine, seconds, variants, quality, seed, negative)
+        job.update(done=variants, files=[sfx_meta(f) for f in files], synth_seconds=round(time.time() - t0, 1))
+
+    return {"job": run_job({"kind": "sfx", "engine": engine}, work)}
+
+
+@app.get("/api/sfx/list")
+def sfx_list():
+    files = sorted(sfx_root().rglob("*.wav"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [sfx_meta(f) for f in files if "נמחקו" not in f.parts]
+
+
+def sfx_path(path: str) -> Path:
+    p = Path(path).resolve()
+    if not allowed_path(p) or not p.is_file() or sfx_root().resolve() not in p.parents:
+        raise HTTPException(400, "נתיב לא מורשה")
+    return p
+
+
+@app.post("/api/sfx/favorite")
+def sfx_favorite(path: str = Form(...), fav: bool = Form(True)):
+    p = sfx_path(path)
+    side = p.with_suffix(".json")
+    m = json.loads(side.read_text(encoding="utf-8")) if side.exists() else {}
+    m["fav"] = fav
+    side.write_text(json.dumps(m, ensure_ascii=False), encoding="utf-8")
+    return sfx_meta(p)
+
+
+@app.post("/api/sfx/delete")
+def sfx_delete(path: str = Form(...)):
+    """Moved to a נמחקו folder, not destroyed."""
+    p = sfx_path(path)
+    trash = sfx_root() / "נמחקו"
+    trash.mkdir(exist_ok=True)
+    for f in (p, p.with_suffix(".json")):
+        if f.exists():
+            f.replace(trash / f"{uuid.uuid4().hex[:4]} {f.name}")
+    with contextlib.suppress(OSError):
+        p.parent.rmdir()  # only when it is empty
+    return {"ok": True}
+
+
+def edit_audio(y: np.ndarray, sr: int, start: float, end: float, gain_db: float, fade_in: float, fade_out: float,
+               loop: bool, normalize: bool) -> np.ndarray:
+    y = y if y.ndim == 2 else y[:, None]
+    a, b = int(max(0.0, start) * sr), int(end * sr) if end and end > 0 else len(y)
+    y = y[a:max(a + 1, min(b, len(y)))].astype(np.float32).copy()
+    if normalize:
+        y *= 0.89 / (float(np.abs(y).max()) or 1.0)
+    y *= 10 ** (gain_db / 20)
+    if loop:  # fold the last 0.3 s over the start so the loop point is seamless
+        n = min(int(0.3 * sr), len(y) // 3)
+        if n > 0:
+            ramp = np.linspace(0, 1, n, dtype=np.float32)[:, None]
+            head = y[:n] * ramp + y[-n:] * (1 - ramp)
+            y = np.concatenate([head, y[n:-n]])
+    else:
+        for secs, rev in ((fade_in, False), (fade_out, True)):
+            n = min(int(max(0.0, secs) * sr), len(y))
+            if n > 0:
+                ramp = np.linspace(0, 1, n, dtype=np.float32)[:, None]
+                if rev:
+                    y[-n:] *= ramp[::-1]
+                else:
+                    y[:n] *= ramp
+    return np.clip(y, -1, 1)
+
+
+def write_audio(path: Path, y: np.ndarray, sr: int):
+    fmt = path.suffix.lstrip(".").lower()
+    if fmt == "mp3":
+        write_mp3(path, y.mean(axis=1) if y.ndim == 2 else y, sr)
+    elif fmt == "ogg":
+        sf.write(path, y, sr, format="OGG", subtype="VORBIS")
+    else:
+        sf.write(path, y, sr, subtype="PCM_16")
+
+
+@app.post("/api/sfx/edit")
+def sfx_edit(path: str = Form(...), start: float = Form(0.0), end: float = Form(0.0), gain_db: float = Form(0.0),
+             fade_in: float = Form(0.0), fade_out: float = Form(0.0), loop: bool = Form(False),
+             normalize: bool = Form(False), name: str = Form("")):
+    """Save an edited copy next to the original (the original stays)."""
+    p = sfx_path(path)
+    y, sr = sf.read(p, dtype="float32", always_2d=True)
+    y = edit_audio(y, sr, start, end, gain_db, fade_in, fade_out, loop, normalize)
+    stem = safe_name(name, "", 60) or f"{p.stem} ערוך"
+    out, n = p.parent / f"{stem}.wav", 2
+    while out.exists():
+        out, n = p.parent / f"{stem} {n}.wav", n + 1
+    write_audio(out, y, sr)
+    m = sfx_meta(p)
+    out.with_suffix(".json").write_text(json.dumps(
+        {"label": m["label"], "prompt": m["prompt"], "engine": m["engine"], "edited": True, "loop": loop,
+         "created": time.strftime("%Y-%m-%d %H:%M"), "fav": False}, ensure_ascii=False), encoding="utf-8")
+    return sfx_meta(out)
+
+
+ASCII_NAME = re.compile(r"[^a-z0-9]+")
+
+
+@app.post("/api/sfx/export")
+def sfx_export(paths_json: str = Form(...), folder: str = Form(""), fmt: str = Form("wav"),
+               english_names: bool = Form(False), sample_rate: int = Form(0)):
+    """Copy sounds into a folder the user picked (a game project, for example), in the chosen format."""
+    if fmt not in SFX_FORMATS:
+        raise HTTPException(400, "פורמט לא נתמך")
+    try:
+        items = [sfx_path(x) for x in json.loads(paths_json)]
+    except (ValueError, TypeError):
+        raise HTTPException(400, "רשימה לא תקינה") from None
+    dest = Path(folder).expanduser() if folder.strip() else out_dir() / "ייצוא אפקטים"
+    if folder.strip() and not dest.is_dir():
+        raise HTTPException(400, "התיקייה לא קיימת")
+    dest.mkdir(parents=True, exist_ok=True)
+    EXPORT_DIRS.add(dest.resolve())
+    written = []
+    for p in items:
+        y, sr = sf.read(p, dtype="float32", always_2d=True)
+        if sample_rate and sample_rate != sr:
+            g = np.gcd(int(sample_rate), int(sr))
+            y, sr = resample_poly(y, sample_rate // g, sr // g, axis=0).astype(np.float32), int(sample_rate)
+        stem = p.stem
+        if english_names:
+            words, stem = [w for w in ASCII_NAME.split(sfx_meta(p)["prompt"].lower()) if w], ""
+            for w in words:  # whole words only, up to ~32 characters
+                if len(stem) + len(w) > 32 and stem:
+                    break
+                stem = f"{stem}_{w}" if stem else w
+            stem = stem or "sound"
+            stem += "_" + (re.findall(r"\d+$", p.stem) or ["1"])[0]
+        out = dest / f"{stem}.{fmt}"
+        write_audio(out, y, sr)
+        written.append(str(out))
+    return {"folder": str(dest), "files": written}
+
+
+_sfx_cache: dict[tuple, np.ndarray] = {}
+
+
+def sfx_find(name: str) -> Path | None:
+    """A saved sound by its name or label: favourites first, then the newest."""
+    name = name.strip()
+    found = [m for m in sfx_list() if name in (m["name"], m["label"], m["folder"])]
+    found.sort(key=lambda m: (not m["fav"], m["created"] == ""), reverse=False)
+    return Path(found[0]["path"]) if found else None
+
+
+def sfx_clip(name: str, sr: int, seconds: float | None = None) -> np.ndarray:
+    """The samples of a story's [אפקט: name] at the story's sample rate. A name that is not one of the user's
+    sounds is made once from the library (or from the name as a description) and saved."""
+    p = sfx_find(name)
+    if p is None:
+        prompt, _ = sfx_library.to_prompt(name, "", sfx_llm())
+        preset = sfx_library.find_preset(name)
+        p = sfx_generate_files(prompt, name, sfx_default_engine(), seconds or (preset[1] if preset else 3.0), 1,
+                               "normal")[0]
+    key = (str(p), p.stat().st_mtime, sr)
+    if key not in _sfx_cache:
+        y, file_sr = sf.read(p, dtype="float32", always_2d=True)
+        y = y.mean(axis=1)
+        if file_sr != sr:
+            g = np.gcd(sr, file_sr)
+            y = resample_poly(y, sr // g, file_sr // g).astype(np.float32)
+        _sfx_cache[key] = y * 0.8
+    return _sfx_cache[key]
+
+
+def lay_ambience(audio: np.ndarray, sr: int, bg: list[tuple[float, str]]) -> np.ndarray:
+    """Loop each [רקע: …] sound quietly under the scene, from where it was written to the end (or the next one)."""
+    out = audio.copy()
+    for i, (start, name) in enumerate(bg):
+        end = bg[i + 1][0] if i + 1 < len(bg) else len(audio) / sr
+        a, b = int(start * sr), int(end * sr)
+        if b - a <= 0 or name in ("", "ללא", "שקט"):
+            continue
+        clip = sfx_clip(name, sr, 10.0)
+        reps = int(np.ceil((b - a) / max(1, len(clip))))
+        bed = np.tile(clip, reps)[:b - a] * 10 ** (-13 / 20)
+        n = min(int(0.6 * sr), len(bed) // 2)
+        if n:
+            bed[:n] *= np.linspace(0, 1, n)
+            bed[-n:] *= np.linspace(1, 0, n)
+        out[a:b] += bed
+    peak = float(np.abs(out).max()) or 1.0
+    return out / peak * 0.98 if peak > 0.98 else out
+
+
+# engines (install / start / remove)
+
+@app.post("/api/engines/sfx/{eid}/install")
+def sfx_install(eid: str, accept_license: bool = Form(False)):
+    if eid not in sfx_engine.ENGINES:
+        raise HTTPException(404, "מנוע לא מוכר")
+    if not accept_license:
+        raise HTTPException(400, "צריך לאשר את תנאי הרישיון של המודל")
+    token = SETTINGS["models"].get("hf_token", "")
+    if sfx_engine.ENGINES[eid]["gated"] and not token:
+        raise HTTPException(400, "המודל הזה דורש אסימון גישה (token) של Hugging Face. אפשר להדביק אותו בהגדרות ← מחשב ומודלים")
+    if any(j["state"] == "running" and j.get("kind") == f"sfx-install-{eid}" for j in JOBS.values()):
+        raise HTTPException(409, "ההתקנה כבר רצה")
+    return {"job": run_job({"kind": f"sfx-install-{eid}", "current": "מתחיל…"},
+                           lambda job: sfx_engine.install(job, eid, token))}
+
+
+@app.post("/api/engines/sfx/{eid}/start")
+def sfx_start(eid: str):
+    if eid not in sfx_engine.ENGINES or not sfx_engine.installed(eid):
+        raise HTTPException(400, "המנוע לא מותקן")
+    sfx_engine.warm_up(eid)
+    return sfx_engine.status()[eid]
+
+
+@app.delete("/api/engines/sfx/{eid}")
+def sfx_remove(eid: str):
+    if eid not in sfx_engine.ENGINES:
+        raise HTTPException(404, "מנוע לא מוכר")
+    sfx_engine.uninstall(eid)
+    return {"ok": True}
 
 
 # --- settings ---
@@ -698,7 +1099,30 @@ def get_settings():
 
 @app.get("/api/engines")
 def engines_status():
-    return {"blue": {"installed": models_setup.ready()}, "fish": fish_engine.status()}
+    return {"blue": {"installed": models_setup.ready()}, "fish": fish_engine.status(), "qwen": qwen_engine.status(),
+            "sfx": sfx_engine.status()}
+
+
+@app.post("/api/engines/qwen/install")
+def qwen_install():
+    if any(j["state"] == "running" and j.get("kind") == "qwen-install" for j in JOBS.values()):
+        raise HTTPException(409, "ההתקנה כבר רצה")
+    return {"job": run_job({"kind": "qwen-install", "current": "מתחיל…"}, qwen_engine.install)}
+
+
+@app.post("/api/engines/qwen/start")
+def qwen_start():
+    if not qwen_engine.installed():
+        raise HTTPException(400, "מנוע QwenTTS-he לא מותקן")
+    engines()
+    qwen_engine.warm_up(RENIKUD)
+    return qwen_engine.status()
+
+
+@app.delete("/api/engines/qwen")
+def qwen_remove():
+    qwen_engine.uninstall()
+    return {"ok": True}
 
 
 @app.post("/api/engines/fish/install")
@@ -745,6 +1169,9 @@ def set_settings(data: str = Form(...)):
             SETTINGS[section].update({k: v for k, v in new[section].items() if k in SETTINGS[section]})
     if SETTINGS["llm"].get("api_key", "").startswith("••••"):  # the browser only sees the masked key
         SETTINGS["llm"]["api_key"] = old["llm"]["api_key"]
+    if SETTINGS["models"].get("hf_token", "").startswith("••••"):
+        SETTINGS["models"]["hf_token"] = old["models"]["hf_token"]
+    SETTINGS["models"]["hf_token"] = SETTINGS["models"]["hf_token"].strip()
     out = SETTINGS["app"]["output_dir"].strip()
     if out and not Path(out).expanduser().is_dir():
         SETTINGS["app"]["output_dir"] = old["app"]["output_dir"]

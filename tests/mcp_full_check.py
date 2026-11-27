@@ -89,12 +89,24 @@ async def run(cmd: list[str]):
         if story.get("state") == "running":
             story = await call("סיפור", "job_status", job_id=story["job_id"])
 
+        await call("הקראה", "speak", text="זו הקראה במנוע קוון, עם הגייה ברורה.", character="נועה", engine="qwen",
+                   file_name="בדיקת MCP - קוון")
+        lib = await call("אפקטים", "sfx_library")
+        snd = await call("אפקטים", "sound_effect", description="מטבע", seconds=1.5, quality="draft",
+                         name="בדיקת MCP מטבע")
+        if isinstance(snd, dict) and snd.get("state") == "running":
+            snd = await call("אפקטים", "job_status", job_id=snd["job_id"])
+        await call("אפקטים", "list_sounds", search="בדיקת MCP")
+        await call("אפקטים", "export_sounds", names_or_paths=[snd["files"][0]["name"]], folder=str(tmp / "game"), fmt="ogg")
+        await call("אפקטים", "sound_effect", expect_error=True, description="x", engine="nope")
+
         trans = await call("תמלול", "transcribe", file_path=str(files["rec"]))
         await call("תמלול", "transcribe", expect_error=True, file_path="/no/such/file.mp3")
         await call("כללי", "open_folder", path=str(out_dir))
 
     return init.server_info.version, tools, out_dir, {"doc": doc, "exp": exp, "story": story, "trans": trans,
-                                                       "chars": len(chars), "ids": [mixed["id"], cloned["id"]]}
+                                                       "chars": len(chars), "ids": [mixed["id"], cloned["id"]],
+                                                       "sfx": snd, "lib": lib}
 
 
 def report(version, tools, out_dir: Path, info: dict, cmd: list[str]) -> Path:
@@ -117,7 +129,9 @@ def report(version, tools, out_dir: Path, info: dict, cmd: list[str]) -> Path:
               "- **חיבור:** השרת מוצא את התוכנה (ופותח אותה אם היא סגורה).",
               f"- **דמויות:** רשימה ({info['chars']} דמויות), ערבוב קולות, שכפול מהקלטה עם תמלול, וסירוב לשכפל בלי הסכמה.",
               "- **ניקוד:** מספרים ושעות הופכים למילים, וכותרת `#` נשמרת.",
-              "- **הקראה:** קול מובנה, ניקוד שלי (בלי ניקוד אוטומטי), מילים באנגלית, הקול המעורבב והקול המשוכפל.",
+              "- **הקראה:** קול מובנה, ניקוד שלי (בלי ניקוד אוטומטי), מילים באנגלית, הקול המעורבב, הקול המשוכפל ומנוע QwenTTS.",
+              f"- **אפקטים:** הספרייה ({sum(len(v) for v in info['lib']['library'].values())} צלילים מוכנים), יצירת מטבע, "
+              "רשימת הצלילים, ייצוא ל־OGG, וסירוב למנוע לא מוכר.",
               f"- **מסמכים:** קריאת Word ({len(info['doc']['parts'])} חלקים) וייצוא לתיקיית MP3.",
               "- **סיפור:** פורמט ההוראות, והפקה עם ליהוק, רגשות, לחישה, צחוק והפסקה.",
               f"- **תמלול:** \"{info['trans']['text'][:80]}\"",

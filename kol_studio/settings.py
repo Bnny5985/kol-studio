@@ -11,20 +11,20 @@ import time
 import urllib.error
 import urllib.request
 
-from . import fish_engine, models_setup, paths
+from . import fish_engine, models_setup, paths, qwen_engine, sfx_engine
 
 FILE = paths.SETTINGS_FILE  # stays on this computer; holds the API key in plain text
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 UPDATE_REPO = "Bnny5985/kol-studio"  # GitHub repository whose releases the app checks for updates
 
 DEFAULTS = {
     "app": {"update_repo": UPDATE_REPO, "check_updates_on_start": True, "threads": 0, "output_dir": "",
             "part_chars": 1200, "reader_prefetch": 2},
-    "models": {"tts_precision": "int8", "asr": "ivrit-turbo", "asr_device": "auto"},
+    "models": {"tts_precision": "int8", "asr": "ivrit-turbo", "asr_device": "auto", "sfx_engine": "", "hf_token": ""},
     "llm": {"provider": "lmstudio", "base_url": "http://127.0.0.1:1234/v1", "api_key": "", "model": ""},
-    "theme": {"mode": "dark", "accent": "#ff4fa3", "accent2": "#ff8a3d", "tp_bg": "#0d0e22", "tp_ink": "#8e90b5",
-              "tp_now": "#ffd25e", "font": "system", "radius": 18, "text_size": 19},
+    "theme": {"design": 2, "mode": "dark", "accent": "#ffb547", "accent2": "#ff7a2f", "tp_bg": "#070b1f", "tp_ink": "#8e9ac8",
+              "tp_now": "#ffc35c", "font": "rubik", "radius": 20, "text_size": 19},
     # measured while the app runs, so estimates fit this voice model on this computer
     "stats": {"chars_per_sec": 12.0, "sentence_sec": 4.0, "samples": 0},
 }
@@ -43,6 +43,8 @@ PROVIDERS = {
 def load() -> dict:
     data = json.loads(FILE.read_text()) if FILE.exists() else {}
     out = json.loads(json.dumps(DEFAULTS))
+    if data.get("theme", {}).get("design") != DEFAULTS["theme"]["design"]:
+        data.pop("theme", None)  # a new look: colours saved for the previous design are dropped once
     for section, values in data.items():
         if section in out and isinstance(values, dict):
             out[section].update({k: v for k, v in values.items() if k in out[section]})  # drop retired keys
@@ -62,6 +64,7 @@ def mask(key: str) -> str:
 def public(data: dict) -> dict:
     d = json.loads(json.dumps(data))
     d["llm"]["api_key"] = mask(d["llm"]["api_key"])
+    d["models"]["hf_token"] = mask(d["models"].get("hf_token", ""))
     return d
 
 
@@ -126,6 +129,8 @@ def catalogue(hw: dict, current: dict) -> list[dict]:
          "אותו מודל בדיוק מלא, איטי בכ־20%"),
         ("tts", "fish-s2-he", "Fish-Audio S2 Pro · עברית", fish_engine.SIZE, 24, None, None, None,
          "רגשות ותגיות מובנים, שכפול מדויק. איטי (כ־5× מזמן אמת ב־M1). רישיון: לשימוש לא מסחרי בלבד"),
+        ("tts", "qwen-he", "QwenTTS-he · 1.7B", qwen_engine.SIZE, 16, None, None, None,
+         "הגייה עברית מדויקת מאוד ושכפול קול, בלי רגשות. איטי (כ־5× מזמן אמת ב־M1). רישיון Apache-2.0"),
         ("nikud", "phonikud", "Phonikud", "0.3GB", 2, "nikud", None, None, "מבוסס Dicta. 20/20 בבדיקה, 52ms למשפט"),
         ("asr", "ivrit-turbo", "ivrit.ai Whisper turbo", "1.6GB", 8, "asr", "asr", "ivrit-turbo",
          "מהיר. 2–6.5% שגיאות בבדיקה"),
@@ -136,13 +141,19 @@ def catalogue(hw: dict, current: dict) -> list[dict]:
     ]
     best = {"tts": "bluev3-int8", "nikud": "phonikud", "asr": "ivrit-large" if ram >= 32 else "ivrit-turbo",
             "llm": "dictalm3-24b" if ram >= 32 else "dictalm2-7b"}
+    for eid, e in sfx_engine.ENGINES.items():
+        rows.append(("sfx", f"sfx-{eid}", f"{e['name']} · {e['by']}", e["size"], e["min_ram"], None, None, None,
+                     f"{e['note']}. {e['speed']}"))
+    best["sfx"] = "sfx-sa3"
     out = []
     for cat, mid, name, size, min_ram, pack, key, value, note in rows:
         out.append({"category": cat, "id": mid, "name": name, "size": size, "min_ram": min_ram, "fits": ram >= min_ram,
                     "pack": pack, "installed": (models_setup.installed(pack) if pack else
-                                                fish_engine.installed() if mid == "fish-s2-he" else None),
-                    "engine": "fish" if mid == "fish-s2-he" else None,
-                    "available": pack is not None or cat == "llm" or mid == "fish-s2-he", "setting": key, "value": value, "note": note,
+                                                fish_engine.installed() if mid == "fish-s2-he" else
+                                                qwen_engine.installed() if mid == "qwen-he" else
+                                                sfx_engine.installed(mid[4:]) if cat == "sfx" else None),
+                    "engine": {"fish-s2-he": "fish", "qwen-he": "qwen"}.get(mid, mid if cat == "sfx" else None),
+                    "available": pack is not None or cat in ("llm", "sfx") or mid in ("fish-s2-he", "qwen-he"), "setting": key, "value": value, "note": note,
                     "active": key is not None and m.get(key) == value, "recommended": best[cat] == mid})
     return out
 

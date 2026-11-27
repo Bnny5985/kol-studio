@@ -238,7 +238,8 @@ def test_mcp_server_exposes_the_tools():
     from kol_studio import mcp_server
 
     names = {t.name for t in asyncio.run(mcp_server.mcp.list_tools())}
-    assert {"kol_status", "list_characters", "add_nikud", "speak", "render_story", "transcribe", "clone_voice"} <= names
+    assert {"kol_status", "list_characters", "add_nikud", "speak", "render_story", "transcribe", "clone_voice",
+            "sound_effect", "sfx_library", "list_sounds", "export_sounds"} <= names
 
 
 def test_mcp_entry_points_at_this_python_in_development(server):
@@ -257,3 +258,69 @@ def test_fish_segments_map_directions_to_tags():
 def test_fish_nikud_keeps_tags(server, monkeypatch):
     monkeypatch.setattr(server, "add_nikud", lambda t: t.replace("שלום", "שָׁלוֹם"))
     assert server.nikud_keep_tags("[laughing] שלום [whisper]") == "[laughing] שָׁלוֹם [whisper]"
+
+
+# ---------- sound effects ----------
+
+def test_sfx_tags_parse_and_render():
+    lines, _, errors = story.parse("@א: שלום [אפקט: מטבע] עולם\n@א: [רקע: גשם]")
+    assert not errors
+    kinds = [p.kind for p in lines[0].pieces]
+    assert kinds == ["text", "sfx", "text"] and lines[0].pieces[1].value == "מטבע"
+    assert lines[1].pieces[0].kind == "bg" and lines[1].text == ""
+    calls = []
+
+    def sfx(name, sr):
+        calls.append(name)
+        return np.ones(sr // 2, dtype=np.float32) * 0.1
+
+    samples, sr = story.render_line(fake_synth, lines[0], sfx=sfx)
+    assert calls == ["מטבע"] and len(samples) > sr * 1.4
+    assert ("sfx", "מטבע") in story.fish_segments(lines[0])
+
+
+def test_sfx_prompt_from_library_dictionary_and_llm():
+    from kol_studio import sfx_library as lib
+
+    assert lib.to_prompt("מטבע")[0].startswith("a bright short coin")
+    assert lib.to_prompt("rain on a tin roof", "קולנועי")[0] == "rain on a tin roof, cinematic, dramatic, high fidelity"
+    prompt, how = lib.to_prompt("כלב נובח ביער בלילה")
+    assert how == "מילון מובנה" and prompt == "dog barking forest night"
+    assert lib.to_prompt("כלב", llm=lambda p: '"a dog barking"\n')[0] == "a dog barking"
+    assert lib.to_prompt("כלב", llm=lambda p: 1 / 0)[1] == "מילון מובנה"  # a failing model falls back
+    with pytest.raises(ValueError):
+        lib.to_prompt("קשקשת מבולבלת")
+
+
+def test_sfx_edit_trims_fades_and_loops(server):
+    sr = 1000
+    y = np.ones((3000, 1), dtype=np.float32) * 0.5
+    out = server.edit_audio(y, sr, 0.5, 2.5, 0, 0.1, 0.2, False, True)
+    assert len(out) == 2000 and out[0, 0] == 0 and abs(out[1000, 0] - 0.89) < 1e-3 and out[-1, 0] < 0.01
+    looped = server.edit_audio(y, sr, 0, 0, -6, 0, 0, True, False)
+    assert len(looped) == 3000 - 300 and np.allclose(looped, 0.5 * 10 ** (-6 / 20), atol=1e-3)
+
+
+def test_character_engine_choice(server, tmp_path, monkeypatch):
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(server, "CHAR_ENGINES", tmp_path / "eng.json")
+    monkeypatch.setattr(server, "voice_payload", lambda cid: {})
+    monkeypatch.setattr(server.fish_engine, "installed", lambda: False)
+    monkeypatch.setattr(server.qwen_engine, "installed", lambda: False)
+    assert server.engine_for("noa") == "blue"
+    with pytest.raises(HTTPException):
+        server.set_character_engine("noa", "fish")  # not installed
+    with pytest.raises(HTTPException):
+        server.engine_for("noa", "fish")
+    monkeypatch.setattr(server.fish_engine, "installed", lambda: True)
+    server.set_character_engine("noa", "fish")
+    assert server.engine_for("noa") == "fish" and server.engine_for("noa", "blue") == "blue"
+    assert server.engine_for("adam") == "blue"
+    assert {c["id"]: c["engine"] for c in server.characters()}["noa"] == "fish"
+
+
+def test_sfx_engines_listed_in_catalogue():
+    hw = {"ram_gb": 64}
+    rows = [m for m in settings.catalogue(hw, settings.load()) if m["category"] == "sfx"]
+    assert {m["id"] for m in rows} == {"sfx-moss", "sfx-sa3"} and all(m["available"] for m in rows)

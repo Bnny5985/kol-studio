@@ -8,7 +8,7 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
 ROOT = Path(SPECPATH).parent
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 datas, binaries, hiddenimports = [], [], []
 for pkg in [
@@ -26,7 +26,10 @@ for pkg in [
     binaries += b
     hiddenimports += h
 datas += [(str(ROOT / "kol_studio" / "index.html"), "kol_studio"),
-          (str(ROOT / "kol_studio" / "fish_worker.py"), "kol_studio")]  # runs in the Fish engine's own Python
+          (str(ROOT / "kol_studio" / "fish_worker.py"), "kol_studio"),  # runs in the Fish engine's own Python
+          (str(ROOT / "kol_studio" / "sfx_worker.py"), "kol_studio"),
+          (str(ROOT / "kol_studio" / "qwen_worker.py"), "kol_studio"),
+          (str(ROOT / "kol_studio" / "assets"), "kol_studio/assets")]  # runs in a sound-effect engine's own Python
 
 # GPL components used by BlueTTS only for non-Hebrew languages are left out on purpose.
 excludes = ["phonemizer", "espeakng_loader", "yiddish_labels", "typer", "mcp.cli", "torch", "tensorflow", "matplotlib",

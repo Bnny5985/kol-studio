@@ -6,99 +6,145 @@
 <title>קול־סטודיו</title>
 <style>
   /* ============ design tokens ============ */
+  @font-face { font-family: "Rubik"; src: url("/assets/fonts/Rubik.ttf") format("truetype"); font-weight: 300 900; font-display: swap; }
   :root {
-    --accent: #ff4fa3; --accent2: #ff8a3d; --accent-ink: #fff;
+    --accent: #ffb547; --accent2: #ff7a2f; --accent-ink: #1a1000;
     --grad: linear-gradient(135deg, var(--accent), var(--accent2));
-    --radius: 18px; --font: -apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif; --text-size: 19px;
-    --stage: #0d0e22; --stage-ink: #8e90b5; --stage-now: #ffd25e;
+    --rim: #4f86ff; --rim2: #8b5cff; --wave: linear-gradient(90deg, #38bdf8, #6d7cff 45%, #b06bff);
+    --radius: 20px; --font: "Rubik", -apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif; --text-size: 19px;
+    --stage: #070b1f; --stage-ink: #8e9ac8; --stage-now: #ffc35c;
     --stage-done: color-mix(in srgb, var(--stage-ink) 40%, var(--stage));
   }
   :root[data-theme="dark"] {
-    --bg: #0d0e24; --bg-glow1: #ff4fa35c; --bg-glow2: #7c5cff55; --bg-glow3: #22d3ee38;
-    --panel: rgba(255, 255, 255, .055); --panel-2: rgba(255, 255, 255, .09); --field: rgba(255, 255, 255, .06);
-    --ink: #eef0ff; --muted: #9a9cc6; --line: rgba(255, 255, 255, .10); --shadow: 0 14px 40px rgba(3, 3, 18, .5);
-    --ok: #4ee3a3; --err: #ff7a8a; --warn: #ffc65c;
+    --bg: #050817; --bg-2: #0a1030;
+    --panel: rgba(14, 22, 58, .62); --panel-2: rgba(26, 38, 92, .55); --field: rgba(8, 14, 40, .72);
+    --ink: #eef2ff; --muted: #93a0cf; --line: rgba(110, 150, 255, .18); --line-strong: rgba(110, 150, 255, .42);
+    --shadow: 0 18px 50px rgba(0, 3, 20, .6); --ok: #4ee3a3; --err: #ff7a8a; --warn: #ffc65c;
   }
   :root[data-theme="light"] {
-    --bg: #f2efff; --bg-glow1: #ff4fa322; --bg-glow2: #7c5cff22; --bg-glow3: #22d3ee22;
-    --panel: rgba(255, 255, 255, .72); --panel-2: rgba(255, 255, 255, .92); --field: rgba(255, 255, 255, .9);
-    --ink: #1c1a36; --muted: #67658f; --line: rgba(40, 30, 100, .11); --shadow: 0 12px 34px rgba(60, 40, 140, .12);
-    --ok: #12935d; --err: #d23a4f; --warn: #a86b00;
+    --bg: #eef2ff; --bg-2: #dfe6ff;
+    --panel: rgba(255, 255, 255, .78); --panel-2: rgba(255, 255, 255, .95); --field: rgba(255, 255, 255, .92);
+    --ink: #121a3a; --muted: #5b6690; --line: rgba(40, 70, 160, .14); --line-strong: rgba(40, 90, 220, .35);
+    --shadow: 0 12px 34px rgba(30, 50, 140, .13); --ok: #12935d; --err: #d23a4f; --warn: #a86b00;
   }
   * { box-sizing: border-box; }
   html, body { min-height: 100%; }
   body { margin: 0; color: var(--ink); font: 16px/1.6 var(--font); background: var(--bg); overflow-x: hidden; }
-  body::before { content: ""; position: fixed; inset: -20vmax; z-index: -1; pointer-events: none;
-    background: radial-gradient(40vmax 40vmax at 85% 10%, var(--bg-glow1), transparent 70%),
-                radial-gradient(45vmax 45vmax at 10% 30%, var(--bg-glow2), transparent 70%),
-                radial-gradient(40vmax 40vmax at 60% 95%, var(--bg-glow3), transparent 70%); }
-  a { color: color-mix(in srgb, var(--accent) 80%, var(--ink)); }
-  ::selection { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+  body::before { content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+    background:
+      radial-gradient(60vw 50vh at 8% 4%, rgba(56, 120, 255, .30), transparent 65%),
+      radial-gradient(50vw 45vh at 96% 0%, rgba(139, 92, 255, .30), transparent 65%),
+      radial-gradient(40vw 40vh at 50% 105%, rgba(56, 189, 248, .14), transparent 70%),
+      linear-gradient(180deg, var(--bg-2), var(--bg) 55%); }
+  body::after { content: ""; position: fixed; z-index: -1; pointer-events: none; top: 0; left: 0; width: 46vw; height: 42vh;
+    background: linear-gradient(115deg, transparent 38%, rgba(255, 170, 70, .16) 47%, rgba(255, 140, 50, .05) 52%, transparent 60%);
+    filter: blur(6px); }
+  :root[data-theme="light"] body::after { opacity: .35; }
+  a { color: color-mix(in srgb, var(--rim) 70%, var(--ink)); }
+  ::selection { background: color-mix(in srgb, var(--rim) 45%, transparent); }
+  svg.i { width: 1.15em; height: 1.15em; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round;
+          stroke-linejoin: round; vertical-align: -.2em; flex: none; }
+  svg.i.fill { fill: currentColor; stroke: none; }
 
   /* ============ layout ============ */
-  header { max-width: 1180px; margin: 0 auto; padding: 22px 24px 0; display: flex; align-items: center; gap: 14px; }
-  .logo { width: 48px; height: 48px; border-radius: 14px; background: var(--grad); display: grid; place-items: center;
-          color: #fff; font: 800 28px/1 var(--font); box-shadow: 0 8px 26px color-mix(in srgb, var(--accent) 45%, transparent); }
-  .brand { flex: 1; min-width: 0; }
-  .brand h1 { margin: 0; font-size: 22px; letter-spacing: .2px; }
-  .brand .sub { margin: 0; }
-  .icon-btn { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel);
-              color: var(--ink); cursor: pointer; display: grid; place-items: center; font-size: 19px; position: relative;
-              backdrop-filter: blur(14px); text-decoration: none; }
-  .icon-btn:hover { background: var(--panel-2); }
+  header { max-width: 1240px; margin: 0 auto; padding: 18px 24px 0; display: grid; grid-template-columns: 1fr auto 1fr;
+           align-items: center; gap: 14px; position: relative; }
+  header .wave-deco { position: absolute; top: -10px; right: -40px; width: 380px; height: 120px; pointer-events: none; opacity: .75; }
+  .brand { grid-column: 2; text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .brand h1 { margin: 0; font: 800 38px/1.1 var(--font); letter-spacing: .5px; display: flex; align-items: center; gap: 12px;
+              background: linear-gradient(180deg, #fff, #c9d6ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  :root[data-theme="light"] .brand h1 { background: linear-gradient(180deg, #16204a, #3a4aa0); -webkit-background-clip: text; background-clip: text; }
+  .brand h1 .mark { width: 54px; height: 40px; flex: none; }
+  .brand .logo-img { width: 64px; height: 64px; border-radius: 16px; object-fit: cover; display: none;
+                     box-shadow: 0 0 30px rgba(120, 100, 255, .45); }
+  .brand .logo-img.on { display: block; margin-bottom: 4px; }
+  .brand .sub { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
+  .head-actions { grid-column: 3; justify-self: end; display: flex; gap: 10px; }
+  .icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--panel);
+              color: var(--ink); cursor: pointer; display: grid; place-items: center; font-size: 20px; position: relative;
+              backdrop-filter: blur(14px); text-decoration: none; box-shadow: inset 0 0 14px rgba(80, 130, 255, .18); }
+  .icon-btn:hover { border-color: var(--rim); box-shadow: 0 0 18px rgba(80, 130, 255, .35), inset 0 0 14px rgba(80, 130, 255, .25); }
   .icon-btn.on { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
   .icon-btn .dot { position: absolute; top: 6px; left: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--grad);
                    box-shadow: 0 0 10px var(--accent); display: none; }
   .icon-btn.has-update .dot { display: block; }
-  nav.tabs { max-width: 1180px; margin: 18px auto 0; padding: 0 24px; }
-  nav.tabs .bar { display: inline-flex; gap: 4px; padding: 5px; border-radius: 999px; background: var(--panel);
-                  border: 1px solid var(--line); backdrop-filter: blur(14px); max-width: 100%; overflow-x: auto; }
-  nav.tabs button { border: 0; background: transparent; color: var(--muted); padding: 9px 18px; border-radius: 999px;
-                    font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; transition: color .2s, background .2s; }
-  nav.tabs button:hover { color: var(--ink); }
-  nav.tabs button.on { color: #fff; background: var(--grad); box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent); }
-  main { max-width: 1180px; margin: 0 auto; padding: 20px 24px 70px; }
+  nav.tabs { max-width: 1240px; margin: 18px auto 0; padding: 0 24px; display: flex; justify-content: center; }
+  nav.tabs .bar { display: flex; gap: 12px; max-width: 100%; overflow-x: auto; padding: 6px 4px 10px; }
+  nav.tabs button { width: 132px; flex: none; border: 1px solid var(--line-strong); color: var(--ink); padding: 12px 8px 10px;
+                    border-radius: 16px; font: 600 15px/1.2 var(--font); cursor: pointer; white-space: nowrap;
+                    display: flex; flex-direction: column; align-items: center; gap: 7px;
+                    background: linear-gradient(180deg, rgba(40, 60, 140, .45), rgba(12, 18, 50, .7));
+                    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 8px 22px rgba(0, 0, 0, .35);
+                    transition: transform .15s, box-shadow .2s, border-color .2s; }
+  :root[data-theme="light"] nav.tabs button { background: linear-gradient(180deg, #fff, #e8eeff); }
+  nav.tabs button svg.i { width: 28px; height: 28px; color: #9cc0ff; }
+  nav.tabs button:hover { transform: translateY(-2px); border-color: var(--rim); box-shadow: 0 0 22px rgba(80, 130, 255, .35); }
+  nav.tabs button.on { border-color: color-mix(in srgb, var(--accent) 80%, #fff); color: #fff;
+                       background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 55%, #3a2200), color-mix(in srgb, var(--accent2) 30%, #140a00));
+                       box-shadow: 0 0 26px color-mix(in srgb, var(--accent) 55%, transparent), inset 0 1px 0 rgba(255, 255, 255, .25); }
+  nav.tabs button.on svg.i { color: #ffd38a; filter: drop-shadow(0 0 6px rgba(255, 180, 80, .8)); }
+  main { max-width: 1240px; margin: 0 auto; padding: 22px 24px 70px; }
   section { display: none; animation: rise .25s ease; } section.on { display: block; }
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .story-grid { display: grid; grid-template-columns: 1fr 310px; gap: 18px; align-items: start; }
-  @media (max-width: 900px) { .two, .story-grid { grid-template-columns: 1fr; } }
-  @media (max-width: 640px) { header, nav.tabs, main { padding-inline: 16px; } .brand .sub { display: none; } }
+  .speak-grid { display: grid; grid-template-columns: 1fr 300px; gap: 22px; align-items: start; }
+  .speak-grid > .studio { order: 2; }  /* on the left, as in the design */
+  @media (max-width: 980px) { .speak-grid > .studio { order: 0; position: static; } }
+  @media (max-width: 980px) { .two, .story-grid, .speak-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { header, nav.tabs, main { padding-inline: 16px; } .brand .sub { display: none; }
+                              header { grid-template-columns: 1fr auto; } .brand { grid-column: 1; text-align: start; align-items: flex-start; }
+                              .head-actions { grid-column: 2; } .brand h1 { font-size: 26px; } nav.tabs button { width: 96px; } }
 
   /* ============ components ============ */
-  .card { background: linear-gradient(160deg, var(--panel-2), var(--panel) 45%); border: 1px solid var(--line);
-          border-radius: var(--radius); padding: 20px 22px; margin-bottom: 18px; box-shadow: var(--shadow);
-          backdrop-filter: blur(18px); position: relative; }
-  .card::after { content: ""; position: absolute; inset: 0 18% auto; height: 1px; pointer-events: none;
-                 background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent), transparent); }
-  .card h2 { margin: 0 0 4px; font-size: 18px; display: flex; align-items: center; gap: 10px; }
-  .card h2::before { content: ""; width: 10px; height: 10px; border-radius: 4px; background: var(--grad);
+  .card { background: linear-gradient(165deg, var(--panel-2), var(--panel) 50%); border: 1px solid var(--line-strong);
+          border-radius: var(--radius); padding: 22px 24px; margin-bottom: 26px; position: relative; backdrop-filter: blur(18px);
+          box-shadow: var(--shadow), inset 0 0 0 1px rgba(255, 255, 255, .03), inset 0 0 40px rgba(70, 120, 255, .10),
+                      0 0 24px rgba(70, 120, 255, .12); }
+  .card::after { content: ""; position: absolute; inset: -1px 12% auto; height: 2px; pointer-events: none; border-radius: 2px;
+                 background: linear-gradient(90deg, transparent, rgba(120, 170, 255, .9), transparent); }
+  .card h2 { margin: 0 0 6px; font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .card h2::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--grad);
                      box-shadow: 0 0 12px var(--accent); flex: none; }
+  .card h2.step { position: absolute; top: -19px; right: 22px; margin: 0; padding: 5px 18px 5px 8px; border-radius: 999px;
+                  background: linear-gradient(180deg, #1b2a6e, #0d1540); border: 1px solid var(--line-strong);
+                  box-shadow: 0 0 18px rgba(80, 130, 255, .35); font-size: 18px; }
+  :root[data-theme="light"] .card h2.step { background: linear-gradient(180deg, #fff, #e6ecff); }
+  .card h2.step::before { display: none; }
+  .card h2.step .num { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 15px;
+                       background: linear-gradient(180deg, #5b8cff, #2f5be0); color: #fff; box-shadow: 0 0 10px rgba(80, 130, 255, .7); }
+  .card:has(> h2.step) { padding-top: 30px; margin-top: 12px; }
   .card h3 { font-size: 15px; margin: 18px 0 8px; }
   .sub, .hint { color: var(--muted); font-size: 14px; }
   .hint { font-size: 13px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
   .spacer { flex: 1; }
-  .btn { border: 0; border-radius: 12px; padding: 10px 18px; font: inherit; font-weight: 650; cursor: pointer; color: #fff;
-         background: var(--grad); box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 35%, transparent);
-         transition: transform .15s, box-shadow .15s, filter .15s; white-space: nowrap; }
-  .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06); }
-  .btn.sec { background: var(--panel-2); color: var(--ink); box-shadow: none; border: 1px solid var(--line); }
-  .btn.sec:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+  .btn { border: 0; border-radius: 14px; padding: 10px 20px; font: inherit; font-weight: 700; cursor: pointer; color: var(--accent-ink);
+         background: var(--grad); box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 1px 0 rgba(255, 255, 255, .45);
+         transition: transform .15s, box-shadow .15s, filter .15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.07); }
+  .btn.sec { background: linear-gradient(180deg, rgba(50, 75, 170, .45), rgba(20, 30, 80, .6)); color: var(--ink); font-weight: 600;
+             box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07); border: 1px solid var(--line-strong); }
+  :root[data-theme="light"] .btn.sec { background: linear-gradient(180deg, #fff, #eaf0ff); }
+  .btn.sec:hover:not(:disabled) { border-color: var(--rim); box-shadow: 0 0 14px rgba(80, 130, 255, .3); }
   .btn.small { padding: 6px 12px; font-size: 14px; border-radius: 10px; }
   .btn:disabled { opacity: .5; cursor: wait; transform: none; }
   .btn.rec { background: linear-gradient(135deg, #ff3b5c, #ff7a59) !important; color: #fff !important; }
   input[type=text], input[type=number], input[type=search], input[type=password], select, textarea {
-    background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; font: inherit;
+    background: var(--field); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 12px; font: inherit;
     padding: 9px 12px; outline: none; transition: border-color .15s, box-shadow .15s; }
-  input:focus, select:focus, textarea:focus { border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
-  select option { background: var(--bg); color: var(--ink); }
+  input:focus, select:focus, textarea:focus { border-color: var(--rim); box-shadow: 0 0 0 3px rgba(80, 130, 255, .22), 0 0 18px rgba(80, 130, 255, .2); }
+  select option { background: #0b1230; color: var(--ink); }
+  :root[data-theme="light"] select option { background: #fff; }
   input[type=file] { color: var(--muted); font: inherit; font-size: 14px; max-width: 100%; }
-  input[type=file]::file-selector-button { border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+  input[type=file]::file-selector-button { border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink);
     border-radius: 10px; padding: 7px 12px; margin-inline-end: 10px; font: inherit; cursor: pointer; }
-  input[type=range] { accent-color: var(--accent); }
-  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; vertical-align: middle; }
+  input[type=range] { -webkit-appearance: none; appearance: none; height: 22px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 5px; border-radius: 99px;
+    background: linear-gradient(90deg, rgba(140, 160, 220, .25) var(--p, 50%), var(--rim) var(--p, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; margin-top: -5.5px;
+    background: #fff; box-shadow: 0 0 0 3px var(--rim), 0 0 12px rgba(80, 130, 255, .8); }
+  input[type=checkbox] { accent-color: var(--rim); width: 16px; height: 16px; vertical-align: middle; }
   textarea { width: 100%; min-height: 140px; resize: vertical; font-size: var(--text-size); line-height: 1.9; margin-top: 12px; }
   textarea.nikud { font-size: calc(var(--text-size) + 4px); line-height: 2.1; }
   textarea.small { min-height: 74px; font-size: 16px; margin-top: 6px; }
@@ -110,15 +156,15 @@
   :root[data-theme="dark"] audio { filter: invert(1) hue-rotate(180deg) saturate(.7); opacity: .9; }
   progress { width: 220px; height: 8px; border-radius: 99px; overflow: hidden; appearance: none; border: 0; background: var(--field); }
   progress::-webkit-progress-bar { background: var(--field); }
-  progress::-webkit-progress-value { background: var(--grad); border-radius: 99px; }
+  progress::-webkit-progress-value { background: var(--wave); border-radius: 99px; }
   pre { white-space: pre-wrap; background: var(--field); border: 1px solid var(--line); border-radius: 14px; padding: 14px;
         max-height: 340px; overflow: auto; font: 15px/1.8 var(--font); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip { border: 1px solid var(--line); background: var(--field); color: var(--ink); border-radius: 999px; padding: 6px 14px;
+  .chip { border: 1px solid var(--line-strong); background: var(--field); color: var(--ink); border-radius: 999px; padding: 6px 14px;
           font: inherit; font-size: 14px; cursor: pointer; transition: all .15s; }
-  .chip:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
-  .chip.on { color: #fff; border-color: transparent; background: var(--grad);
-             box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .chip:hover { border-color: var(--rim); }
+  .chip.on { color: var(--accent-ink); border-color: transparent; background: var(--grad);
+             box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent); }
   .chip small { opacity: .75; }
   .badge { font-size: 12px; border-radius: 999px; padding: 2px 9px; border: 1px solid var(--line); white-space: nowrap; color: var(--muted); }
   .badge.ok { border-color: color-mix(in srgb, var(--ok) 60%, transparent); color: var(--ok); }
@@ -126,13 +172,64 @@
   .readout { font-size: 26px; font-weight: 750; background: var(--grad); -webkit-background-clip: text; background-clip: text;
              color: transparent; line-height: 1.2; }
   .toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 30px); opacity: 0; transition: all .25s;
-           background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 9px 18px; z-index: 50;
+           background: var(--panel-2); border: 1px solid var(--line-strong); border-radius: 999px; padding: 9px 18px; z-index: 50;
            box-shadow: var(--shadow); backdrop-filter: blur(16px); pointer-events: none; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  dialog { width: min(540px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 22px; padding: 22px;
-           background: color-mix(in srgb, var(--bg) 88%, #fff 2%); color: var(--ink); box-shadow: var(--shadow); }
-  dialog::backdrop { background: rgba(5, 5, 20, .6); backdrop-filter: blur(4px); }
+  dialog { width: min(560px, calc(100vw - 32px)); border: 1px solid var(--line-strong); border-radius: 22px; padding: 22px;
+           background: linear-gradient(165deg, #121c4a, #080d26); color: var(--ink);
+           box-shadow: var(--shadow), 0 0 40px rgba(80, 130, 255, .25); }
+  :root[data-theme="light"] dialog { background: #fff; }
+  dialog::backdrop { background: rgba(2, 4, 16, .65); backdrop-filter: blur(4px); }
   mark { background: color-mix(in srgb, var(--accent) 40%, transparent); color: inherit; border-radius: 4px; }
+
+  /* ============ studio panel, drop zone, wave player ============ */
+  .studio { position: sticky; top: 14px; }
+  .studio .card { margin-bottom: 0; }
+  .studio h2 { justify-content: flex-start; }
+  .studio .blk { border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; margin-top: 12px; background: var(--field); }
+  .studio .blk-h { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 14px; color: var(--ink); margin-bottom: 8px; }
+  .carousel { display: grid; grid-template-columns: 30px auto 1fr 30px; align-items: center; gap: 10px; }
+  .carousel .arrow { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent;
+                     color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+  .carousel .arrow:hover { border-color: var(--rim); }
+  .carousel .avatar { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font: 800 24px var(--font);
+                      color: #fff; box-shadow: 0 0 0 2px rgba(120, 160, 255, .6), 0 0 16px rgba(80, 130, 255, .45); }
+  .carousel .who b { display: block; font-size: 17px; } .carousel .who small { color: var(--muted); font-size: 13px; }
+  .slider { margin-top: 10px; }
+  .slider .top { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: var(--muted); }
+  .slider .top b { color: var(--ink); font-weight: 600; }
+  .slider input[type=range] { width: 100%; }
+  .studio select { width: 100%; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .presets button { border: 1px solid var(--line-strong); background: transparent; color: var(--ink); border-radius: 999px;
+                    padding: 3px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .presets button:hover { border-color: var(--accent); }
+  .presets button .x { opacity: .5; margin-inline-start: 6px; }
+  .text-grid { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: stretch; margin-top: 12px; }
+  @media (max-width: 760px) { .text-grid { grid-template-columns: 1fr; } }
+  .text-grid textarea { margin-top: 0; height: 100%; }
+  .drop { border: 1.5px dashed var(--line-strong); border-radius: 16px; display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: 8px; padding: 16px; text-align: center; cursor: pointer; color: var(--muted);
+          background: rgba(10, 18, 50, .35); transition: border-color .15s, background .15s; min-height: 150px; }
+  .drop svg.i { width: 34px; height: 34px; color: #9cc0ff; }
+  .drop.over, .drop:hover { border-color: var(--rim); background: rgba(40, 70, 170, .25); }
+  .drop input[type=file] { display: none; }
+  .drop .fname { color: var(--ink); font-size: 13px; word-break: break-all; }
+  .wp { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; margin-top: 14px; }
+  .wp .transport { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 999px;
+                   background: rgba(10, 16, 46, .8); border: 1px solid var(--line-strong); }
+  .wp .tbtn { width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); cursor: pointer;
+              display: grid; place-items: center; font-size: 18px; }
+  .wp .tbtn:hover { color: #9cc0ff; } .wp .tbtn.on { color: var(--accent); }
+  .wp .tbtn.play { width: 54px; height: 54px; color: var(--accent-ink); background: var(--grad);
+                   box-shadow: 0 0 0 3px rgba(255, 190, 90, .35), 0 0 24px color-mix(in srgb, var(--accent) 70%, transparent); }
+  .wp .tbtn.play svg.i { width: 24px; height: 24px; }
+  .wp .track { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; min-width: 0; }
+  .wp canvas { width: 100%; height: 56px; cursor: pointer; display: block; }
+  .wp .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; direction: ltr; }
+  .wp .side { display: flex; gap: 4px; }
+  .wp.empty { opacity: .45; pointer-events: none; }
+  @media (max-width: 640px) { .wp { grid-template-columns: 1fr; } .wp .transport { justify-self: center; } }
 
   /* ============ characters ============ */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 14px; }
@@ -218,72 +315,219 @@
   .reply { background: var(--field); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 12px; }
   .fish-only, .fish-hint { display: none; }
   body.has-fish .fish-only { display: inline-flex; gap: 6px; align-items: center; }
+  .eng-pick { display: inline-flex; gap: 6px; align-items: center; }
+  .char .eng { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .char .eng select { display: block; width: 100%; margin-top: 3px; padding: 4px 8px; font-size: 13px; }
   body.has-fish.fish-on .fish-hint { display: block; margin-top: 8px; }
   details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-top: 12px; }
+  .sfx-take { border: 1px solid var(--line); border-radius: 16px; padding: 12px; background: var(--field); margin-top: 10px; }
+  .sfx-take audio { width: 100%; margin-top: 8px; }
+  .sfx-take .acts, .snd .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .snd-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; max-height: 520px; overflow: auto; }
+  .snd { display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--line);
+         border-radius: 14px; padding: 8px 12px; background: var(--field); }
+  .snd .nm b { display: block; } .snd .nm small { color: var(--muted); font-size: 12px; display: block; direction: ltr; text-align: right;
+         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+  .snd .star { background: none; border: 0; font-size: 20px; cursor: pointer; color: var(--muted); }
+  .snd .star.on { color: #ffd25e; }
+  .play-btn { width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; color: #fff; background: var(--grad); font-size: 14px; }
+  .sfx-prompt { direction: ltr; text-align: left; font-family: ui-monospace, Menlo, monospace; font-size: 14px; min-height: 52px; }
+  .eng-card { border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; background: var(--field); margin-top: 10px; }
+  .eng-card .row { margin-top: 8px; }
+  canvas#edWave { width: 100%; height: 110px; background: var(--stage); border-radius: 12px; display: block; margin-top: 8px; }
+  .ed-grid { display: grid; grid-template-columns: 120px 1fr 64px; gap: 8px 10px; align-items: center; margin-top: 12px; }
+  .ed-grid input[type=range] { width: 100%; }
+  /* ============ light & glass ============ */
+  .stage-fx { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .stage-fx .beam { position: absolute; top: -20vh; width: 34vw; height: 120vh; filter: blur(30px); opacity: .55; mix-blend-mode: screen;
+                    transform-origin: top center; animation: sway 14s ease-in-out infinite alternate; }
+  .stage-fx .beam.b1 { left: 4vw; background: linear-gradient(180deg, rgba(90, 140, 255, .55), transparent 70%);
+                       clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); transform: rotate(-18deg); }
+  .stage-fx .beam.b2 { right: 6vw; background: linear-gradient(180deg, rgba(170, 110, 255, .45), transparent 70%);
+                       clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); transform: rotate(16deg); animation-delay: -6s; }
+  .stage-fx .beam.b3 { left: 38vw; width: 22vw; background: linear-gradient(180deg, rgba(255, 170, 80, .30), transparent 60%);
+                       clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%); transform: rotate(4deg); animation-duration: 18s; }
+  @keyframes sway { from { rotate: -3deg; } to { rotate: 3deg; } }
+  .stage-fx .floor { position: absolute; left: -10%; right: -10%; bottom: -8vh; height: 34vh;
+                     background: radial-gradient(60% 60% at 50% 100%, rgba(70, 120, 255, .35), transparent 70%),
+                                 repeating-linear-gradient(90deg, rgba(110, 160, 255, .10) 0 1px, transparent 1px 80px);
+                     transform: perspective(500px) rotateX(62deg); transform-origin: bottom; opacity: .8; }
+  .stage-fx .dust { position: absolute; inset: 0; opacity: .5;
+                    background-image: radial-gradient(1.5px 1.5px at 12% 22%, #9cc0ff, transparent), radial-gradient(1px 1px at 28% 68%, #c9b5ff, transparent),
+                      radial-gradient(1.5px 1.5px at 46% 12%, #fff, transparent), radial-gradient(1px 1px at 63% 44%, #9cc0ff, transparent),
+                      radial-gradient(2px 2px at 78% 76%, #ffcf8a, transparent), radial-gradient(1px 1px at 88% 28%, #fff, transparent),
+                      radial-gradient(1.5px 1.5px at 6% 84%, #c9b5ff, transparent), radial-gradient(1px 1px at 54% 90%, #9cc0ff, transparent);
+                    animation: drift 40s linear infinite; }
+  @keyframes drift { from { transform: translateY(0); } to { transform: translateY(-40px); } }
+  :root[data-theme="light"] .stage-fx { opacity: .35; }
+  @media (prefers-reduced-motion: reduce) { .stage-fx * { animation: none !important; } }
+
+  /* glass surfaces: translucent body, blurred backdrop, specular top light, gradient light rim */
+  .card, nav.tabs button, .btn.sec, .icon-btn, .studio .blk, .wp .transport, .drop, .snd, .sfx-take, .eng-card, .char, .mrow, .cast .who {
+    position: relative; isolation: isolate; }
+  .card { background: linear-gradient(165deg, rgba(40, 60, 140, .30), rgba(10, 16, 48, .42) 55%, rgba(14, 20, 60, .5));
+          backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%); border-color: transparent; }
+  .card::before, nav.tabs button::before, .btn.sec::before, .icon-btn::before, .wp .transport::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 1;
+    background: linear-gradient(145deg, rgba(150, 190, 255, .95), rgba(110, 150, 255, .18) 28%, rgba(150, 110, 255, .10) 60%, rgba(120, 170, 255, .75));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+  .card::after { inset: 0; height: auto; border-radius: inherit; z-index: 0;
+                 background: radial-gradient(420px circle at var(--mx, 50%) var(--my, -40%), rgba(120, 170, 255, .14), transparent 60%),
+                             linear-gradient(180deg, rgba(255, 255, 255, .07), transparent 22%); }
+  .card > * { position: relative; z-index: 2; }
+  .card > h2.step { position: absolute; z-index: 3; }
+  nav.tabs button { background: linear-gradient(180deg, rgba(70, 100, 200, .30), rgba(14, 22, 64, .55)); border-color: transparent;
+                    backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%); overflow: hidden; }
+  nav.tabs button::after { content: ""; position: absolute; inset: 0 0 52% 0; border-radius: 16px 16px 40% 40% / 16px 16px 20px 20px;
+                           background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0)); pointer-events: none; }
+  nav.tabs button.on::before { background: linear-gradient(145deg, #ffe2a8, rgba(255, 180, 80, .4) 35%, rgba(255, 140, 50, .3) 65%, #ffcf7a); }
+  nav.tabs button.on { box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 60%, transparent), 0 14px 30px rgba(255, 140, 40, .25),
+                                   inset 0 -12px 24px rgba(255, 170, 60, .25); }
+  .btn.sec { background: linear-gradient(180deg, rgba(90, 120, 230, .26), rgba(20, 30, 90, .45)); border-color: transparent;
+             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .btn.sec::after, .btn:not(.sec)::after { content: ""; position: absolute; inset: 1px 1px 50% 1px; border-radius: inherit; pointer-events: none;
+                                            background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0)); }
+  .btn { position: relative; overflow: hidden; }
+  .btn:not(.sec) { box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent), 0 6px 18px rgba(255, 120, 30, .3),
+                               inset 0 -3px 8px rgba(160, 60, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .6); }
+  .btn:not(.sec):hover:not(:disabled) { box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 75%, transparent), 0 8px 22px rgba(255, 120, 30, .4),
+                                                    inset 0 -3px 8px rgba(160, 60, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .6); }
+  .btn:not(.sec)::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%; pointer-events: none;
+                           background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .45), transparent); transform: skewX(-20deg); }
+  .btn:not(.sec):hover::before { animation: shine .8s ease; }
+  @keyframes shine { to { left: 130%; } }
+  .icon-btn { background: linear-gradient(180deg, rgba(80, 110, 220, .28), rgba(14, 22, 64, .55)); border-color: transparent; }
+  .studio .blk, .snd, .sfx-take, .eng-card, .char, .mrow, .cast .who {
+    background: linear-gradient(180deg, rgba(60, 90, 190, .16), rgba(8, 14, 44, .45)); border-color: rgba(120, 160, 255, .22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
+  textarea, input[type=text], input[type=number], input[type=search], input[type=password], select {
+    background: rgba(5, 10, 34, .62); border-color: rgba(120, 160, 255, .26); box-shadow: inset 0 2px 10px rgba(0, 0, 0, .35); }
+  .wp .transport { background: linear-gradient(180deg, rgba(60, 90, 190, .25), rgba(8, 12, 40, .7)); border-color: transparent; }
+  .wp .tbtn.play { box-shadow: 0 0 0 3px rgba(255, 200, 110, .35), 0 0 30px color-mix(in srgb, var(--accent) 80%, transparent),
+                               inset 0 -4px 10px rgba(160, 60, 0, .4), inset 0 2px 0 rgba(255, 255, 255, .6); }
+  :root[data-theme="light"] .card { background: linear-gradient(165deg, rgba(255, 255, 255, .75), rgba(235, 240, 255, .6)); }
+  :root[data-theme="light"] nav.tabs button, :root[data-theme="light"] .btn.sec, :root[data-theme="light"] .icon-btn,
+  :root[data-theme="light"] .studio .blk { background: linear-gradient(180deg, rgba(255, 255, 255, .9), rgba(230, 236, 255, .7)); }
+  :root[data-theme="light"] textarea, :root[data-theme="light"] input[type=text], :root[data-theme="light"] select { background: #fff; box-shadow: none; }
+
+  /* the studio art (from the app's design image) */
+  .studio-art { display: block; width: calc(100% + 40px); margin: -26px -20px -46px; position: relative; z-index: 0; pointer-events: none;
+                filter: drop-shadow(0 20px 30px rgba(40, 80, 255, .35)); animation: float 7s ease-in-out infinite alternate; }
+  @keyframes float { from { transform: translateY(0); } to { transform: translateY(-6px); } }
+  .studio .card { z-index: 1; }
 </style>
 </head>
 <body>
+<div class="stage-fx" aria-hidden="true"><div class="beam b1"></div><div class="beam b2"></div><div class="beam b3"></div><div class="floor"></div><div class="dust"></div></div>
 <header>
-  <div class="logo" aria-hidden="true">ק</div>
+  <svg class="wave-deco" viewBox="0 0 380 120" aria-hidden="true">
+    <defs><linearGradient id="wd" x1="0" x2="1"><stop offset="0" stop-color="#38bdf8" stop-opacity="0"/><stop offset=".5" stop-color="#6d7cff"/><stop offset="1" stop-color="#c06bff"/></linearGradient></defs>
+    <g fill="none" stroke="url(#wd)" stroke-width="1.2" opacity=".9">
+      <path d="M0 80 C60 30 110 110 170 60 S280 10 380 40"/><path d="M0 86 C60 40 115 112 175 66 S285 18 380 48"/>
+      <path d="M0 92 C62 50 120 114 180 72 S290 26 380 56"/><path d="M0 98 C64 60 125 116 185 78 S295 34 380 64"/>
+      <path d="M0 104 C66 70 130 118 190 84 S300 42 380 72"/></g>
+  </svg>
   <div class="brand">
-    <h1>קול־סטודיו</h1>
-    <p class="sub">ניקוד, הקראה, דמויות ותמלול בעברית — הכל רץ על המחשב שלך</p>
+    <img class="logo-img" id="logoImg" alt="" src="/assets/logo.png" onload="this.classList.add('on')" onerror="this.remove()">
+    <h1><svg class="mark" viewBox="0 0 54 40" aria-hidden="true"><defs><linearGradient id="mk" x1="0" x2="1"><stop offset="0" stop-color="#ffcf6b"/><stop offset="1" stop-color="#ff8a2f"/></linearGradient></defs>
+      <g stroke="url(#mk)" stroke-width="3.2" stroke-linecap="round"><path d="M4 18v4M10 13v14M16 8v24M22 15v10M28 4v32M34 11v18M40 16v8M46 13v14M52 18v4"/></g></svg>קול־סטודיו</h1>
+    <p class="sub">ניקוד, הקראה, דמויות, אפקטים ותמלול בעברית — הכל רץ על המחשב שלך</p>
   </div>
-  <a class="icon-btn" id="openBrowser" href="" target="_blank" rel="noopener" title="פתח בדפדפן (אם המיקרופון לא עובד בחלון התוכנה)">↗</a>
-  <button class="icon-btn" id="gear" title="הגדרות" aria-label="הגדרות">⚙<span class="dot"></span></button>
+  <div class="head-actions">
+    <a class="icon-btn" id="openBrowser" href="" target="_blank" rel="noopener" title="פתח בדפדפן (אם המיקרופון לא עובד בחלון התוכנה)"><i data-icon="external"></i></a>
+    <button class="icon-btn" id="gear" title="הגדרות" aria-label="הגדרות"><i data-icon="settings"></i><span class="dot"></span></button>
+  </div>
 </header>
 <nav class="tabs"><div class="bar">
-  <button data-tab="speak" class="on">הקראה</button>
-  <button data-tab="reader">קורא מסמכים</button>
-  <button data-tab="story">סיפור</button>
-  <button data-tab="chars">דמויות</button>
-  <button data-tab="asr">תמלול</button>
+  <button data-tab="speak" class="on"><i data-icon="headphones"></i>הקראה</button>
+  <button data-tab="reader"><i data-icon="filetext"></i>קורא מסמכים</button>
+  <button data-tab="story"><i data-icon="book"></i>סיפור</button>
+  <button data-tab="chars"><i data-icon="users"></i>דמויות</button>
+  <button data-tab="sfx"><i data-icon="grid"></i>אפקטים</button>
+  <button data-tab="asr"><i data-icon="lines"></i>תמלול</button>
 </div></nav>
 <main>
 
 <!-- ================= הקראה ================= -->
 <section id="speak" class="on">
-  <div class="card">
-    <h2>1. טקסט</h2>
-    <div class="sub">Word, PDF, מצגות PowerPoint, EPUB או טקסט. שורה שמתחילה ב־"# " פותחת חלק חדש.</div>
-    <div class="row">
-      <input type="file" id="docFile" accept=".txt,.md,.docx,.doc,.pdf,.pptx,.epub,.rtf,.odt,.html,.htm,.srt">
-      <button class="btn sec" id="loadDoc">טען קובץ</button>
-      <span class="status" id="docStatus"></span>
+ <div class="speak-grid">
+  <aside class="studio">
+    <img class="studio-art" src="/assets/studio-art.png" alt="" onerror="this.remove()">
+    <div class="card">
+      <h2><i data-icon="lines"></i> סטודיו קול</h2>
+      <div class="blk">
+        <div class="blk-h"><i data-icon="user"></i> דמות ודיבור</div>
+        <div class="carousel">
+          <button class="arrow" id="voicePrev" title="הדמות הקודמת"><i data-icon="right"></i></button>
+          <div class="avatar" id="voiceAv">נ</div>
+          <div class="who"><b id="voiceName">—</b><small id="voiceSrc"></small></div>
+          <button class="arrow" id="voiceNext" title="הדמות הבאה"><i data-icon="left"></i></button>
+        </div>
+        <select id="voice" style="margin-top:10px" aria-label="דמות"></select>
+      </div>
+      <div class="blk">
+        <div class="slider"><div class="top"><span><i data-icon="gauge"></i> מהירות</span><b id="speedV">1.0x</b></div>
+          <input type="range" id="speed" min="0.6" max="1.6" step="0.05" value="1.0"></div>
+        <div class="slider"><div class="top"><span><i data-icon="volume"></i> עוצמת השמעה</span><b id="volV">100%</b></div>
+          <input type="range" id="vol" min="0" max="1" step="0.05" value="1"></div>
+        <div class="slider"><div class="top"><span><i data-icon="cpu"></i> מודל קול</span></div>
+          <select id="engine"><option value="auto">לפי הדמות</option><option value="blue">BlueV3 · מהיר</option><option value="qwen">QwenTTS-he · הכי ברור, איטי</option><option value="fish">Fish S2-Pro · רגשות, איטי</option></select></div>
+      </div>
+      <div class="blk">
+        <div class="blk-h"><i data-icon="bookmark"></i> פריסטים</div>
+        <div class="hint">שומר דמות, מודל ומהירות ללחיצה אחת.</div>
+        <div class="presets" id="presets"></div>
+        <div class="row" style="margin-top:8px"><button class="btn sec small" id="presetSave"><i data-icon="bookmark"></i> שמירת פריסט</button></div>
+      </div>
     </div>
-    <textarea id="plain" placeholder="הדבק כאן טקסט בעברית, או טען קובץ…"># פתיחה
+  </aside>
+  <div>
+  <div class="card">
+    <h2 class="step">1. טקסט</h2>
+    <div class="text-grid">
+      <textarea id="plain" placeholder="הדבק כאן טקסט בעברית, או טען קובץ…"># פתיחה
 שלום, קוראים לי דנה. היום אספר לכם על המחקר שלי בבלשנות.
 
 # סיכום
 תודה רבה שהקשבתם.</textarea>
-    <div class="row"><button class="btn" id="doNikud">נקד ←</button><span class="status" id="nikudStatus"></span></div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="hint">Word, PDF, PowerPoint, EPUB או טקסט. שורה שמתחילה ב־"# " פותחת חלק חדש.</div>
+        <label class="drop" id="docDrop"><i data-icon="upload"></i><span>גרור קובץ לכאן<br>או לחץ לבחירה</span>
+          <span class="fname" id="docName"></span>
+          <input type="file" id="docFile" accept=".txt,.md,.docx,.doc,.pdf,.pptx,.epub,.rtf,.odt,.html,.htm,.srt"></label>
+        <button class="btn sec" id="loadDoc"><i data-icon="folder"></i> טען קובץ</button>
+        <span class="status" id="docStatus"></span>
+      </div>
+    </div>
+    <div class="row"><button class="btn" id="doNikud"><i data-icon="wand"></i> נקד</button><span class="status" id="nikudStatus"></span></div>
   </div>
   <div class="card">
-    <h2>2. ניקוד — בדוק ותקן</h2>
+    <h2 class="step">2. ניקוד — בדוק ותקן</h2>
     <div class="sub">ההקראה תהיה לפי הניקוד שכאן. אפשר לערוך ישירות. שורות בלי ניקוד ינוקדו אוטומטית.</div>
     <textarea id="pointed" class="nikud"></textarea>
     <div class="row">
-      <label>דמות</label><select id="voice"></select>
-      <span class="fish-only"><label>מנוע</label> <select id="engine"><option value="blue">BlueV3 · מהיר</option><option value="fish">Fish S2-Pro · רגשות, איטי</option></select></span>
-      <label>מהירות</label><input type="number" id="speed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:84px">
-      <button class="btn" id="doSpeak">הקרא ▶</button>
+      <button class="btn" id="doSpeak"><i data-icon="play" class="fill"></i> הקרא</button>
       <span class="status" id="speakStatus"></span>
+      <span class="spacer"></span>
+      <a id="dl" download="hakraa.wav" style="display:none" class="btn sec small"><i data-icon="download"></i> הורד WAV</a>
     </div>
     <div class="hint fish-hint" id="fishHint">ב־Fish אפשר לכתוב תגיות רגש באנגלית בסוגריים בתוך הטקסט, למשל <b dir="ltr">[laughing]</b>, <b dir="ltr">[whisper]</b>, <b dir="ltr">[sad]</b>, <b dir="ltr">[shouting]</b>. ההקראה הראשונה טוענת את המודל (כדקה וחצי).</div>
-    <audio id="player" controls></audio>
-    <div class="row"><a id="dl" download="hakraa.wav" style="display:none">⬇ הורד קובץ WAV</a></div>
+    <audio id="player" class="wave"></audio>
   </div>
   <div class="card">
-    <h2>3. ייצוא לתיקייה</h2>
+    <h2 class="step">3. ייצוא לתיקייה</h2>
     <div class="sub">כל חלק הופך לקובץ MP3 ממוספר, עם פלייליסט, תוכן עניינים והטקסט המנוקד. <span id="expEstimate"></span></div>
     <div class="row">
       <label>שם</label><input type="text" id="expTitle" value="הקראה" style="width:230px">
-      <button class="btn" id="doExport">צור תיקייה</button>
+      <button class="btn" id="doExport"><i data-icon="folder"></i> צור תיקייה</button>
       <progress id="expProg" value="0" max="1" style="display:none"></progress>
       <span class="status" id="expStatus"></span>
       <button class="btn sec" id="expOpen" style="display:none">פתח את התיקייה</button>
     </div>
   </div>
+  </div>
+ </div>
 </section>
 
 <!-- ================= קורא מסמכים ================= -->
@@ -328,7 +572,7 @@
           <span class="status" id="stStatus"></span>
         </div>
         <div id="stErrors" class="status warn"></div>
-        <audio id="stPlayer" controls style="display:none"></audio>
+        <audio id="stPlayer" class="wave"></audio>
         <div class="row"><button class="btn sec" id="stOpen" style="display:none">פתח את התיקייה</button>
           <span class="hint" id="stFiles"></span></div>
       </div>
@@ -340,7 +584,7 @@
           <span class="spacer"></span>
           <label>מהירות כללית</label><input type="number" id="stSpeed" value="1.0" min="0.6" max="1.6" step="0.05" style="width:80px">
           <label>רווח בין שורות</label><input type="number" id="stGap" value="0.35" min="0" max="3" step="0.05" style="width:80px">
-          <span class="fish-only"><label>מנוע</label> <select id="stEngine"><option value="blue">BlueV3 · מהיר</option><option value="fish">Fish S2-Pro · רגשות, איטי</option></select></span>
+          <span class="eng-pick"><label>מודל קול</label> <select id="stEngine"><option value="auto">לפי הדמות</option><option value="blue">BlueV3 · מהיר</option><option value="qwen">QwenTTS-he · הכי ברור, איטי</option><option value="fish">Fish S2-Pro · רגשות, איטי</option></select></span>
         </div>
       </div>
     </div>
@@ -358,6 +602,104 @@
     <input type="search" id="pickQ" placeholder="חפש לפי שם או סוג…" autocomplete="off">
     <div id="pickList" class="pick-list"></div>
     <div class="hint">לחיצה על דמות מוסיפה שורה שלה במקום הסמן ומלהקת את הקול שלה. חצים ו־Enter עובדים.</div>
+  </dialog>
+</section>
+
+<!-- ================= אפקטים קוליים ================= -->
+<section id="sfx">
+  <div class="card" id="sfxNoEngine" style="display:none">
+    <h2>כדי לייצר צלילים צריך מנוע אפקטים</h2>
+    <div class="sub">יש שני מנועים מקומיים. הם רצים על המחשב שלך, בלי אינטרנט אחרי ההתקנה. אפשר להתקין את שניהם.</div>
+    <div id="sfxEngCards"></div>
+  </div>
+  <div class="story-grid">
+    <div>
+      <div class="card">
+        <h2>איזה צליל צריך?</h2>
+        <textarea id="sfxText" class="small" placeholder="למשל: דלת עץ ישנה חורקת בטירה בלילה · או לחץ על כפתור מהספרייה"></textarea>
+        <div class="row">
+          <label>סגנון</label><select id="sfxStyle"></select>
+          <label>אורך</label><input type="range" id="sfxSec" min="0.5" max="30" step="0.5" value="3" style="width:140px"><b id="sfxSecV">3 שניות</b>
+        </div>
+        <div class="row">
+          <label>גרסאות</label><select id="sfxVar"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select>
+          <label>איכות</label><select id="sfxQ"><option value="draft">טיוטה · מהיר</option><option value="normal" selected>רגילה</option><option value="high">גבוהה · איטי</option></select>
+          <label>מנוע</label><select id="sfxEngine"></select>
+        </div>
+        <details id="sfxAdv"><summary>מה המודל יקבל (באנגלית) — אפשר לערוך</summary>
+          <textarea id="sfxPrompt" class="small sfx-prompt" spellcheck="false" placeholder="יתמלא אוטומטית מהתיאור"></textarea>
+          <div class="row"><button class="btn sec small" id="sfxTranslate">תרגם מחדש מהתיאור</button><span class="hint" id="sfxHow"></span></div>
+          <div class="row"><label>בלי</label><input type="text" id="sfxNeg" placeholder="מה לא לשמוע, באנגלית: music, voices…" style="flex:1;direction:ltr"></div>
+        </details>
+        <div class="row">
+          <button class="btn" id="sfxGo">צור צליל ✦</button>
+          <progress id="sfxProg" style="display:none"></progress>
+          <span class="status" id="sfxStatus"></span>
+        </div>
+        <div id="sfxTakes"></div>
+      </div>
+      <div class="card">
+        <div class="row" style="margin-top:0;justify-content:space-between">
+          <h2 style="margin:0">הצלילים שלי</h2>
+          <span class="row" style="margin:0"><input type="search" id="sndQ" placeholder="חיפוש…" style="width:160px">
+            <label><input type="checkbox" id="sndFav"> רק מועדפים</label>
+            <button class="btn sec small" id="sndOpen">פתח תיקייה</button></span>
+        </div>
+        <div id="sndList" class="snd-list"></div>
+        <div class="reply">
+          <b>ייצוא למשחק או לסרטון</b> <span class="hint">— סמן צלילים ברשימה (☑) וייצא אותם לתיקייה שתבחר</span>
+          <div class="row">
+            <label>פורמט</label><select id="expFmt"><option value="wav">WAV</option><option value="ogg">OGG (למשחקים)</option><option value="mp3">MP3</option></select>
+            <label>קצב דגימה</label><select id="expSr"><option value="0">מקורי</option><option value="48000">48kHz</option><option value="44100">44.1kHz</option><option value="22050">22kHz (קטן)</option></select>
+            <label><input type="checkbox" id="expEn"> שמות קבצים באנגלית</label>
+          </div>
+          <div class="row"><input type="text" id="expDir" placeholder="תיקיית יעד (ריק = ייצוא אפקטים בתיקיית התוצאות)" style="flex:1">
+            <button class="btn sec small" id="expPick">בחר תיקייה…</button></div>
+          <div class="row"><button class="btn" id="expGo" disabled>ייצא את הנבחרים</button><span class="status" id="expStatus"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card palette">
+      <h2>ספרייה</h2>
+      <div class="hint">לחיצה ממלאת את התיאור והאורך. אחר כך לוחצים "צור צליל".</div>
+      <div id="sfxLib"></div>
+      <h3 class="pal-h">בתוך סיפור</h3>
+      <div class="hint">בתסריט אפשר לכתוב <b>[אפקט: מטבע]</b> כדי לשמוע צליל באותו מקום, או <b>[רקע: גשם]</b> לצליל רקע שקט עד סוף הסצנה. השם הוא שם של צליל שלך או כפתור מהספרייה.</div>
+    </div>
+  </div>
+  <dialog id="sfxEdit">
+    <div class="pick-head"><h2 id="edTitle">עריכת צליל</h2><button class="btn sec small" id="edClose" aria-label="סגור">✕</button></div>
+    <canvas id="edWave" width="900" height="110"></canvas>
+    <div class="ed-grid">
+      <label>התחלה</label><input type="range" id="edStart" min="0" step="0.01" value="0"><b id="edStartV">0</b>
+      <label>סוף</label><input type="range" id="edEnd" min="0" step="0.01" value="0"><b id="edEndV">0</b>
+      <label>עוצמה</label><input type="range" id="edGain" min="-18" max="12" step="1" value="0"><b id="edGainV">0dB</b>
+      <label>הופעה הדרגתית</label><input type="range" id="edFi" min="0" max="2" step="0.05" value="0"><b id="edFiV">0</b>
+      <label>דעיכה בסוף</label><input type="range" id="edFo" min="0" max="3" step="0.05" value="0.1"><b id="edFoV">0.1</b>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="edLoop"> לולאה חלקה (לרעשי רקע במשחק)</label>
+      <label><input type="checkbox" id="edNorm" checked> עוצמה אחידה</label>
+    </div>
+    <div class="row"><input type="text" id="edName" placeholder="שם לעותק החדש" style="flex:1"></div>
+    <div class="row"><button class="btn sec" id="edPlay">▶ השמע את הקטע</button><button class="btn" id="edSave">שמור עותק</button>
+      <span class="status" id="edStatus"></span></div>
+    <div class="hint">המקור נשמר. העותק הערוך מופיע ב"הצלילים שלי".</div>
+  </dialog>
+  <dialog id="sfxLic">
+    <h2 style="margin-top:0" id="sfxLicTitle">התקנת מנוע</h2>
+    <div class="sub" id="sfxLicSub"></div>
+    <div class="reply" id="sfxLicText"></div>
+    <div id="sfxTokenBox" style="display:none">
+      <h3>אסימון גישה של Hugging Face</h3>
+      <div class="hint">1. <a href="https://huggingface.co/stabilityai/stable-audio-3-small-sfx" target="_blank" rel="noopener">היכנס לדף המודל</a> ולחץ על אישור התנאים (Agree).
+        2. <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">צור אסימון מסוג Read</a> והדבק אותו כאן. הוא נשמר רק במחשב שלך.</div>
+      <div class="row"><input type="password" id="sfxToken" placeholder="hf_…" style="flex:1;direction:ltr" autocomplete="off"></div>
+    </div>
+    <div class="row"><label><input type="checkbox" id="sfxAccept"> קראתי ואני מסכים לתנאי הרישיון</label></div>
+    <progress id="sfxInstProg" value="0" max="100" style="width:100%;display:none;margin-top:10px"></progress>
+    <div class="status" id="sfxInstStatus"></div>
+    <div class="row"><button class="btn" id="sfxInstGo" disabled>התקן</button><button class="btn sec" id="sfxLicClose">סגור</button></div>
   </dialog>
 </section>
 
@@ -531,7 +873,8 @@
       <div class="row" style="margin:0"><input type="color" id="thC1" title="צבע ראשון"><input type="color" id="thC2" title="צבע שני"><span class="hint">שני צבעים למעבר</span></div>
       <label>גופן</label>
       <select id="thFont">
-        <option value="system">ברירת מחדל של המערכת</option>
+        <option value="rubik">Rubik (ברירת המחדל)</option>
+        <option value="system">הגופן של המערכת</option>
         <option value="arial">Arial Hebrew</option>
         <option value="raanana">רעננה</option>
         <option value="peninim">פנינים</option>
@@ -633,6 +976,104 @@ function setAudio(audio, blobOrUrl) {
   return audio.src;
 }
 
+/* ================= icons (Lucide, ISC license) ================= */
+const ICONS = {
+  headphones: '<path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>',
+  filetext: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  lines: '<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>',
+  grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  external: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  upload: '<path d="M12 13v8"/><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="m8 17 4-4 4 4"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+  back5: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  fwd5: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  volume: '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
+  mute: '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><line x1="22" x2="16" y1="9" y2="15"/><line x1="16" x2="22" y1="9" y2="15"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  gauge: '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  cpu: '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+  left: '<path d="m15 18-6-6 6-6"/>', right: '<path d="m9 18 6-6-6-6"/>',
+  bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+  wand: '<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/>',
+};
+const icon = (name, fill = false) => `<svg class="i${fill ? " fill" : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ""}</svg>`;
+function renderIcons(root = document) {
+  root.querySelectorAll("i[data-icon]").forEach(i => { i.outerHTML = icon(i.dataset.icon, i.classList.contains("fill") || i.dataset.icon === "play" || i.dataset.icon === "pause"); });
+}
+renderIcons();
+document.querySelectorAll(".card h2.step").forEach(h => {
+  const m = h.textContent.match(/^\s*(\d+)\.\s*(.*)$/);
+  if (m) h.innerHTML = `<span class="num">${m[1]}</span>${m[2]}`;
+});
+function rangeFill(r) { const p = (r.value - r.min) / (r.max - r.min) * 100; r.style.setProperty("--p", `${100 - p}%`); }
+// RTL: the track fills from the right, so the filled share is drawn from the end
+document.addEventListener("input", e => { if (e.target.type === "range") rangeFill(e.target); });
+const fillAllRanges = () => document.querySelectorAll('input[type=range]').forEach(rangeFill);
+
+/* ================= wave player ================= */
+const fmtT = (s) => isFinite(s) ? `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "00:00";
+function wavePlayer(audio) {
+  const wp = el("div", "wp empty");
+  wp.innerHTML = `<div class="transport">
+      <button class="tbtn" data-a="loop" title="השמעה חוזרת">${icon("repeat")}</button>
+      <button class="tbtn" data-a="back" title="5 שניות אחורה">${icon("back5")}</button>
+      <button class="tbtn play" data-a="play" title="נגן / השהה">${icon("play", true)}</button>
+      <button class="tbtn" data-a="fwd" title="5 שניות קדימה">${icon("fwd5")}</button>
+    </div>
+    <div class="track"><span class="time cur">00:00</span><canvas height="112"></canvas><span class="time dur">00:00</span></div>
+    <div class="side"><button class="tbtn" data-a="mute" title="השתק">${icon("volume")}</button></div>`;
+  audio.after(wp); audio.style.display = "none";
+  const cv = wp.querySelector("canvas"), g = cv.getContext("2d");
+  let peaks = null;
+  const draw = () => {
+    const w = cv.width = cv.clientWidth * 2, h = cv.height, n = Math.floor(w / 6);
+    g.clearRect(0, 0, w, h);
+    const prog = audio.duration ? audio.currentTime / audio.duration : 0;
+    const grad = g.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, "#38bdf8"); grad.addColorStop(.5, "#6d7cff"); grad.addColorStop(1, "#c06bff");
+    for (let i = 0; i < n; i++) {
+      const v = peaks ? peaks[Math.floor(i / n * peaks.length)] : .08 + .06 * Math.sin(i / 3);
+      const bh = Math.max(3, v * h * .92), x = w - (i + 1) * 6;  // right to left, like the text
+      g.fillStyle = (i / n) <= prog ? grad : "rgba(140,160,220,.28)";
+      g.fillRect(x, (h - bh) / 2, 3, bh);
+    }
+  };
+  const ro = new ResizeObserver(draw); ro.observe(cv);
+  audio.addEventListener("timeupdate", () => { wp.querySelector(".cur").textContent = fmtT(audio.currentTime); draw(); });
+  audio.addEventListener("loadedmetadata", () => { wp.querySelector(".dur").textContent = fmtT(audio.duration); wp.classList.remove("empty"); draw(); });
+  audio.addEventListener("play", () => wp.querySelector('[data-a="play"]').innerHTML = icon("pause", true));
+  audio.addEventListener("pause", () => wp.querySelector('[data-a="play"]').innerHTML = icon("play", true));
+  audio.addEventListener("emptied", () => { peaks = null; });
+  audio.addEventListener("loadeddata", async () => {
+    try {
+      const buf = await (await fetch(audio.currentSrc || audio.src)).arrayBuffer();
+      const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 2, 44100);
+      const data = (await ctx.decodeAudioData(buf)).getChannelData(0), N = 400, step = Math.floor(data.length / N) || 1;
+      const p = []; for (let i = 0; i < N; i++) { let m = 0; for (let j = i * step; j < (i + 1) * step && j < data.length; j++) m = Math.max(m, Math.abs(data[j])); p.push(m); }
+      const top = Math.max(...p) || 1; peaks = p.map(v => Math.pow(v / top, .8)); draw();
+    } catch { /* keep the placeholder bars */ }
+  });
+  wp.onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const a = b.dataset.a;
+    if (a === "play") audio.paused ? audio.play() : audio.pause();
+    if (a === "back") audio.currentTime = Math.max(0, audio.currentTime - 5);
+    if (a === "fwd") audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5);
+    if (a === "loop") { audio.loop = !audio.loop; b.classList.toggle("on", audio.loop); }
+    if (a === "mute") { audio.muted = !audio.muted; b.innerHTML = icon(audio.muted ? "mute" : "volume"); }
+  };
+  cv.onclick = (e) => { if (!audio.duration) return; const r = cv.getBoundingClientRect(); audio.currentTime = (r.right - e.clientX) / r.width * audio.duration; };
+  return wp;
+}
+document.querySelectorAll("audio.wave").forEach(wavePlayer);
+
 function showTab(id) {
   document.querySelectorAll("nav.tabs button, section").forEach(x => x.classList.remove("on"));
   $("gear").classList.toggle("on", id === "settings");
@@ -644,14 +1085,15 @@ $("gear").onclick = async () => { showTab("settings"); await loadEngines(); load
 
 /* ================= theme ================= */
 const FONTS = {
+  rubik: '"Rubik", -apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif',
   system: '-apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif', arial: '"Arial Hebrew", Arial, sans-serif',
   raanana: '"Raanana", "Arial Hebrew", sans-serif', peninim: '"New Peninim MT", "Times New Roman", serif',
   times: '"Times New Roman", "David", serif',
 };
-const PALETTES = [["#ff4fa3", "#ff8a3d"], ["#7c5cff", "#22d3ee"], ["#3b82f6", "#06b6d4"], ["#f97316", "#facc15"],
+const PALETTES = [["#ffb547", "#ff7a2f"], ["#5b8cff", "#8b5cff"], ["#38bdf8", "#6d7cff"], ["#ff4fa3", "#ff8a3d"],
                   ["#10b981", "#84cc16"], ["#c084fc", "#f472b6"]];
-const THEME_DEFAULT = { mode: "dark", accent: "#ff4fa3", accent2: "#ff8a3d", tp_bg: "#0d0e22", tp_ink: "#8e90b5",
-                        tp_now: "#ffd25e", font: "system", radius: 18, text_size: 19 };
+const THEME_DEFAULT = { design: 2, mode: "dark", accent: "#ffb547", accent2: "#ff7a2f", tp_bg: "#070b1f", tp_ink: "#8e9ac8",
+                        tp_now: "#ffc35c", font: "rubik", radius: 20, text_size: 19 };
 let theme = { ...THEME_DEFAULT };
 
 function applyTheme(t) {
@@ -665,7 +1107,7 @@ function applyTheme(t) {
   try { localStorage.setItem("theme", JSON.stringify(t)); } catch {}
 }
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => theme.mode === "auto" && applyTheme(theme));
-try { const s = JSON.parse(localStorage.getItem("theme") || "null"); if (s) { theme = { ...THEME_DEFAULT, ...s }; } } catch {}
+try { const s = JSON.parse(localStorage.getItem("theme") || "null"); if (s && s.design === THEME_DEFAULT.design) { theme = { ...THEME_DEFAULT, ...s }; } } catch {}
 applyTheme(theme);
 
 let themeSaveTimer = null;
@@ -718,7 +1160,7 @@ async function saveSettings(change, okMsg = "נשמר ✓") {
 document.querySelectorAll("#setNav .chip").forEach(b => b.onclick = () => $(b.dataset.go).scrollIntoView({ behavior: "smooth", block: "start" }));
 
 /* --- computer + models --- */
-const CAT_NAMES = { tts: "הקראה ושכפול קול", nikud: "ניקוד", asr: "תמלול", llm: "מודל שפה (רץ ב־LM Studio / Ollama)" };
+const CAT_NAMES = { tts: "הקראה ושכפול קול", nikud: "ניקוד", asr: "תמלול", sfx: "אפקטים קוליים", llm: "מודל שפה (רץ ב־LM Studio / Ollama)" };
 
 async function loadSystem() {
   const j = await getJSON("/api/system"); HW = j.hardware;
@@ -729,7 +1171,7 @@ async function loadSystem() {
   chips.forEach(([k, v]) => { const s = el("span", "", `${k}: `); s.append(el("b", "", String(v))); $("hw").append(s); });
 
   const box = $("models"); box.innerHTML = "";
-  for (const cat of ["tts", "nikud", "asr", "llm"]) {
+  for (const cat of ["tts", "nikud", "asr", "sfx", "llm"]) {
     const items = j.models.filter(m => m.category === cat); if (!items.length) continue;
     box.append(el("h3", "", CAT_NAMES[cat]));
     items.forEach(m => box.append(modelRow(m)));
@@ -753,6 +1195,48 @@ function modelRow(m) {
       rm.onclick = async () => {
         if (!confirm("להסיר את מנוע Fish? זה מוחק כ־13GB מהמחשב. אפשר להתקין שוב בכל זמן.")) return;
         await fetch("/api/engines/fish", { method: "DELETE" }); await loadEngines(); loadSystem();
+      };
+      row.append(rm);
+    }
+    return row;
+  }
+  if (m.engine === "qwen") {
+    const st = ENGINES?.qwen || {};
+    if (!m.installed) {
+      const b = el("button", "btn sec small", `התקן (${m.size})`);
+      b.onclick = async () => {
+        if (!confirm(`להתקין את QwenTTS-he? ההורדה כ־${m.size}. רישיון Apache-2.0: מותר לכל שימוש.`)) return;
+        b.disabled = true;
+        try {
+          const { job } = await (await api("/api/engines/qwen/install")).json();
+          await pollJob(job, j => b.textContent = `${Math.round(j.done)}%`, 2000);
+          toast("QwenTTS-he הותקן ✓"); await loadEngines(); loadSystem(); loadChars();
+        } catch (e) { b.disabled = false; b.textContent = "נסה שוב"; setStatus("modelStatus", e.message + " — אפשר ללחוץ שוב, ההתקנה תמשיך", "err"); }
+      };
+      row.append(b);
+    } else {
+      const names = { stopped: "מותקן · לא טעון", loading: "טוען…", ready: "מוכן ✓", busy: "עובד…", error: "שגיאה" };
+      row.append(el("span", "badge" + (st.status === "ready" ? " ok" : st.status === "error" ? " warn" : ""), names[st.status] || "מותקן"));
+      const rm = el("button", "btn sec small", "הסר");
+      rm.onclick = async () => {
+        if (!confirm(`להסיר את QwenTTS-he? זה מוחק כ־${m.size} מהמחשב. אפשר להתקין שוב בכל זמן.`)) return;
+        await fetch("/api/engines/qwen", { method: "DELETE" }); await loadEngines(); loadSystem(); loadChars();
+      };
+      row.append(rm);
+    }
+    return row;
+  }
+  if (m.engine?.startsWith("sfx-")) {
+    const id = m.engine.slice(4), st = ENGINES?.sfx?.[id] || {};
+    if (!m.installed) { const b = el("button", "btn sec small", `התקן (${m.size})`);
+      b.onclick = async () => { if (!SFX) await loadSfx(); openSfxInstall(id); }; row.append(b); }
+    else {
+      const names = { stopped: "מותקן · לא טעון", loading: "טוען…", ready: "מוכן ✓", busy: "עובד…", error: "שגיאה" };
+      row.append(el("span", "badge" + (st.status === "ready" ? " ok" : st.status === "error" ? " warn" : ""), names[st.status] || "מותקן"));
+      const rm = el("button", "btn sec small", "הסר");
+      rm.onclick = async () => {
+        if (!confirm(`להסיר את ${m.name}? זה מוחק כ־${m.size} מהמחשב. הצלילים שיצרת נשארים.`)) return;
+        await fetch(`/api/engines/sfx/${id}`, { method: "DELETE" }); await loadEngines(); loadSystem();
       };
       row.append(rm);
     }
@@ -788,10 +1272,24 @@ async function loadEngines() {
   try { ENGINES = await getJSON("/api/engines"); } catch { ENGINES = null; }
   const has = !!ENGINES?.fish?.installed;
   document.body.classList.toggle("has-fish", has);
-  if (!has) { $("engine").value = "blue"; $("stEngine").value = "blue"; }
-  document.body.classList.toggle("fish-on", has && $("engine").value === "fish");
+  for (const id of ["engine", "stEngine"]) {
+    for (const [eng, label] of Object.entries(VOICE_LABELS)) {
+      if (eng === "blue") continue;
+      const o = $(id).querySelector(`option[value="${eng}"]`), ok = !!ENGINES?.[eng]?.installed;
+      o.disabled = !ok; o.textContent = ok ? label : `${label.split(" · ")[0]} · להתקנה בהגדרות`;
+      if (!ok && $(id).value === eng) $(id).value = "auto";
+    }
+  }
+  fishHint();
 }
-$("engine").onchange = () => document.body.classList.toggle("fish-on", $("engine").value === "fish");
+const charEngine = (id) => CHARS.find(c => c.id === id)?.engine || "blue";
+const VOICE_LABELS = { blue: "BlueV3 · מהיר", qwen: "QwenTTS-he · הכי ברור, איטי", fish: "Fish S2-Pro · רגשות, איטי" };
+function fishHint() {
+  const e = $("engine").value, on = e === "fish" || (e === "auto" && charEngine($("voice").value) === "fish");
+  document.body.classList.toggle("fish-on", !!ENGINES?.fish?.installed && on);
+}
+$("engine").onchange = fishHint;
+$("voice").addEventListener("change", fishHint);
 function openFishInstall() {
   $("fishLicLink").href = ENGINES?.fish?.license_url || "#";
   $("fishAccept").checked = false; $("fishGo").disabled = true; setStatus("fishStatus", "");
@@ -1034,6 +1532,18 @@ async function loadChars() {
     const extra = [c.ref_seconds ? `${c.ref_seconds} שניות דיבור` : "", c.quality != null ? `התאמה לתמלול ${Math.round(c.quality * 100)}%` : ""].filter(Boolean).join(" · ");
     if (extra) d.append(el("small", "", extra));
     if (c.notes?.length) { const n = el("small", "", c.notes.join(" · ")); n.style.color = "var(--warn)"; d.append(n); }
+    const eng = el("label", "eng", "מודל קול"), es = el("select");
+    for (const [id, label] of Object.entries(VOICE_LABELS)) {
+      const ok = id === "blue" || !!ENGINES?.[id]?.installed;
+      const o = new Option(ok ? label : `${label.split(" · ")[0]} · להתקנה בהגדרות`, id); o.disabled = !ok; es.add(o);
+    }
+    es.value = c.engine || "blue";
+    es.onchange = async () => {
+      try { await api(`/api/characters/${c.id}/engine`, { engine: es.value }); c.engine = es.value; fishHint();
+            toast(`${c.name} תדבר מעכשיו ב־${VOICE_LABELS[es.value].split(" · ")[0]}`); }
+      catch (e) { toast(e.message); es.value = c.engine || "blue"; }
+    };
+    eng.append(es); d.append(eng);
     const acts = el("div", "acts"), play = el("button", "btn sec small", "▶ דוגמה");
     play.onclick = () => sample(c.id, play); acts.append(play);
     if (c.source !== "קול מובנה") {
@@ -1047,6 +1557,7 @@ async function loadChars() {
     d.append(acts); grid.append(d);
   });
   if (stSpeakers.length) renderCast();  // new clones/mixes show up in the story cast
+  showVoice();
 }
 
 const sampleAudio = new Audio();
@@ -1086,8 +1597,9 @@ $("doSpeak").onclick = async () => {
   if (text.length > 3000 && !confirm("הטקסט ארוך. לייצוא מסמך שלם עדיף 'צור תיקייה'. להקריא בכל זאת?")) return;
   $("doSpeak").disabled = true; setStatus("speakStatus", "מקריא…");
   try {
-    const engine = $("engine").value;
-    if (engine === "fish" && ENGINES?.fish?.status !== "ready") setStatus("speakStatus", "מקריא ב־Fish… בפעם הראשונה המודל נטען, כדקה וחצי");
+    const engine = $("engine").value, eff = engine === "auto" ? charEngine($("voice").value) : engine;
+    if (eff === "qwen" && ENGINES?.qwen?.status !== "ready") setStatus("speakStatus", "מקריא ב־QwenTTS… בפעם הראשונה המודל נטען");
+    if (eff === "fish" && ENGINES?.fish?.status !== "ready") setStatus("speakStatus", "מקריא ב־Fish… בפעם הראשונה המודל נטען, כדקה וחצי");
     const r = await api("/api/speak", { text, character: $("voice").value, speed: $("speed").value, auto_nikud: true, engine });
     loadEngines();
     $("dl").href = setAudio($("player"), await r.blob()); $("player").play(); $("dl").style.display = "";
@@ -1440,13 +1952,300 @@ $("setupGo").onclick = async () => {
   } catch (e) { setStatus("setupStatus", e.message + " — בדוק את החיבור לאינטרנט ונסה שוב", "err"); $("setupGo").disabled = false; }
 };
 
+/* ================= sound effects ================= */
+let SFX = null, sfxPromptFor = "", SOUNDS = [], sfxSel = new Set();
+const sfxPlayer = new Audio();
+const fileUrl = (p) => `/api/file?path=${encodeURIComponent(p)}`;
+const engName = (id) => SFX?.engines?.[id]?.name || id;
+
+async function loadSfx() {
+  try { SFX = await getJSON("/api/sfx/catalogue"); } catch (e) { toast(e.message); return; }
+  const ready = Object.entries(SFX.engines).filter(([, e]) => e.installed);
+  $("sfxNoEngine").style.display = ready.length ? "none" : "";
+  // engine cards (always offered in the no-engine card)
+  const cards = $("sfxEngCards"); cards.innerHTML = "";
+  for (const [id, e] of Object.entries(SFX.engines)) {
+    const c = el("div", "eng-card"); c.append(el("b", "", `${e.name} · ${e.by}`));
+    c.append(el("div", "hint", `${e.note}. ${e.speed}. גודל: ${e.size}`));
+    const r = el("div", "row");
+    if (e.installed) r.append(el("span", "badge ok", "מותקן ✓"));
+    else { const b = el("button", "btn small", `התקן (${e.size})`); b.onclick = () => openSfxInstall(id); r.append(b); }
+    c.append(r); cards.append(c);
+  }
+  const sel = $("sfxEngine"), keep = sel.value; sel.innerHTML = "";
+  for (const [id, e] of Object.entries(SFX.engines)) {
+    const o = new Option(`${e.name}${e.installed ? "" : " · לא מותקן"}`, id); o.disabled = !e.installed; sel.add(o);
+  }
+  sel.value = keep && SFX.engines[keep]?.installed ? keep
+    : (SFX.default_engine && SFX.engines[SFX.default_engine]?.installed ? SFX.default_engine
+      : (ready.find(([id]) => id === "sa3") || ready[0] || [""])[0]);
+  sfxEngineLimits();
+  if (!$("sfxStyle").options.length) SFX.styles.forEach(st => $("sfxStyle").add(new Option(st.label, st.label)));
+  const lib = $("sfxLib");
+  if (!lib.childElementCount) for (const [cat, items] of Object.entries(SFX.library)) {
+    lib.append(el("h3", "pal-h", cat));
+    const box = el("div", "pal-btns");
+    items.forEach(it => { const b = el("button", "", it.label); b.title = it.prompt;
+      b.onclick = () => { $("sfxText").value = it.label; setSec(it.seconds); $("sfxPrompt").value = ""; sfxPromptFor = "";
+                          $("sfxText").focus(); }; box.append(b); });
+    lib.append(box);
+  }
+  loadSounds();
+}
+function sfxEngineLimits() {
+  const e = SFX?.engines?.[$("sfxEngine").value]; if (!e) return;
+  $("sfxSec").max = e.max_seconds; if (+$("sfxSec").value > e.max_seconds) setSec(e.max_seconds);
+}
+function setSec(v) { $("sfxSec").value = v; $("sfxSecV").textContent = `${v} שניות`; }
+$("sfxSec").oninput = () => setSec($("sfxSec").value);
+$("sfxEngine").onchange = async () => { sfxEngineLimits(); try { await saveSettings({ models: { sfx_engine: $("sfxEngine").value } }); } catch {} };
+$("sfxText").oninput = () => { if (sfxPromptFor && sfxPromptFor !== sfxKey()) $("sfxPrompt").value = ""; };
+$("sfxStyle").onchange = () => { $("sfxPrompt").value = ""; };
+const sfxKey = () => $("sfxText").value.trim() + "|" + $("sfxStyle").value;
+
+async function sfxTranslate() {
+  const text = $("sfxText").value.trim();
+  if (!text) throw new Error("כתוב מה לשמוע, או בחר כפתור מהספרייה");
+  const j = await (await api("/api/sfx/prompt", { text, style: $("sfxStyle").value })).json();
+  $("sfxPrompt").value = j.prompt; sfxPromptFor = sfxKey();
+  $("sfxHow").textContent = `תורגם בעזרת: ${j.how}` + (j.how === "מילון מובנה" ? " · לתרגום טוב יותר אפשר להגדיר מודל שפה בהגדרות" : "");
+  return j.prompt;
+}
+$("sfxTranslate").onclick = async () => { try { await sfxTranslate(); $("sfxAdv").open = true; } catch (e) { setStatus("sfxStatus", e.message, "err"); } };
+
+$("sfxGo").onclick = async () => {
+  const eng = $("sfxEngine").value;
+  if (!eng || !SFX?.engines?.[eng]?.installed) { $("sfxNoEngine").style.display = ""; $("sfxNoEngine").scrollIntoView({ behavior: "smooth" }); return; }
+  $("sfxGo").disabled = true; $("sfxProg").style.display = ""; $("sfxProg").removeAttribute("value");
+  try {
+    const prompt = $("sfxPrompt").value.trim() || await sfxTranslate();
+    const e = SFX.engines[eng], n = +$("sfxVar").value;
+    const first = e.status !== "ready" && e.status !== "busy";
+    setStatus("sfxStatus", (first ? "טוען את המודל (בפעם הראשונה לוקח זמן)… " : "") + `מייצר ${n} גרסאות · ${e.speed}`);
+    const t0 = Date.now(), tick = setInterval(() => setStatus("sfxStatus",
+      `${first ? "טוען ומייצר" : "מייצר"} ${n} גרסאות ב־${e.name} · ${Math.round((Date.now() - t0) / 1000)} שניות`), 1000);
+    try {
+      const { job } = await (await api("/api/sfx/generate", { prompt, label: $("sfxText").value.trim(), engine: eng,
+        seconds: $("sfxSec").value, variants: n, quality: $("sfxQ").value, negative: $("sfxNeg").value.trim() })).json();
+      const done = await pollJob(job, null, 1500);
+      showTakes(done.files);
+      setStatus("sfxStatus", `מוכן ✓ · ${done.synth_seconds} שניות`, "ok");
+    } finally { clearInterval(tick); }
+    loadSfx();
+  } catch (e) { setStatus("sfxStatus", e.message, "err"); }
+  finally { $("sfxGo").disabled = false; $("sfxProg").style.display = "none"; }
+};
+
+function showTakes(files) {
+  const box = $("sfxTakes"); box.innerHTML = "";
+  box.append(el("div", "hint", "בחר את הגרסה שאתה אוהב: ★ שומר במועדפים. כל הגרסאות נשמרות ב\"הצלילים שלי\"."));
+  files.forEach((f, i) => {
+    const t = el("div", "sfx-take"); t.append(el("b", "", `גרסה ${i + 1} · ${f.name}`));
+    const a = el("audio"); a.controls = true; a.src = fileUrl(f.path); t.append(a);
+    const acts = el("div", "acts");
+    const fav = el("button", "btn sec small", "★ למועדפים");
+    fav.onclick = async () => { await api("/api/sfx/favorite", { path: f.path, fav: true }); fav.textContent = "★ במועדפים"; fav.disabled = true; loadSounds(); };
+    const ed = el("button", "btn sec small", "✂ ערוך"); ed.onclick = () => openEditor(f);
+    const again = el("button", "btn sec small", "↻ עוד גרסאות כמו זו"); again.onclick = () => $("sfxGo").click();
+    acts.append(fav, ed, again); t.append(acts); box.append(t);
+  });
+  if (files[0]) { box.querySelector("audio").play().catch(() => {}); }
+}
+
+async function loadSounds() {
+  try { SOUNDS = await getJSON("/api/sfx/list"); } catch { SOUNDS = []; }
+  renderSounds();
+}
+function renderSounds() {
+  const q = $("sndQ").value.trim().toLowerCase(), favOnly = $("sndFav").checked, box = $("sndList"); box.innerHTML = "";
+  const list = SOUNDS.filter(s => (!favOnly || s.fav) && (!q || (s.name + " " + s.label + " " + s.prompt).toLowerCase().includes(q)));
+  if (!list.length) box.append(el("div", "hint", SOUNDS.length ? "אין צלילים שמתאימים לחיפוש" : "עוד אין צלילים. צור את הראשון למעלה ✦"));
+  list.forEach(s => {
+    const r = el("div", "snd");
+    const ck = el("input"); ck.type = "checkbox"; ck.checked = sfxSel.has(s.path);
+    ck.onchange = () => { ck.checked ? sfxSel.add(s.path) : sfxSel.delete(s.path); $("expGo").disabled = !sfxSel.size;
+                          $("expGo").textContent = sfxSel.size ? `ייצא ${sfxSel.size} צלילים` : "ייצא את הנבחרים"; };
+    const play = el("button", "play-btn", "▶");
+    play.onclick = () => { if (!sfxPlayer.paused && sfxPlayer.dataset.p === s.path) { sfxPlayer.pause(); return; }
+                           sfxPlayer.src = fileUrl(s.path); sfxPlayer.dataset.p = s.path; sfxPlayer.play(); };
+    const nm = el("div", "nm"); nm.append(el("b", "", s.name));
+    nm.append(el("small", "", `${s.seconds ?? "?"}s · ${engName(s.engine)}${s.edited ? " · ערוך" : ""} · ${s.prompt}`));
+    const acts = el("div", "acts"); acts.style.marginTop = "0";
+    const star = el("button", "star" + (s.fav ? " on" : ""), "★"); star.title = "מועדף";
+    star.onclick = async () => { await api("/api/sfx/favorite", { path: s.path, fav: !s.fav }); s.fav = !s.fav; renderSounds(); };
+    const ed = el("button", "btn sec small", "✂"); ed.title = "עריכה"; ed.onclick = () => openEditor(s);
+    const story = el("button", "btn sec small", "+ לסיפור"); story.title = "הוסף לתסריט בסיפור";
+    story.onclick = () => { navigator.clipboard?.writeText(`[אפקט: ${s.name}]`); toast(`הועתק: [אפקט: ${s.name}] — הדבק בתסריט`); };
+    const del = el("button", "btn sec small", "מחק");
+    del.onclick = async () => { if (!confirm(`למחוק את "${s.name}"? הוא יועבר לתיקיית נמחקו.`)) return;
+                                await api("/api/sfx/delete", { path: s.path }); sfxSel.delete(s.path); loadSounds(); };
+    acts.append(star, ed, story, del);
+    r.append(ck, play, nm, acts); box.append(r);
+  });
+}
+$("sndQ").oninput = renderSounds; $("sndFav").onchange = renderSounds;
+$("sndOpen").onclick = async () => { try { await api("/api/reveal", { path: META.output_dir + "/אפקטים קוליים" }); } catch (e) { toast(e.message); } };
+$("expPick").onclick = async () => { try { const j = await (await api("/api/pick-folder", {})).json(); if (j.path) $("expDir").value = j.path; } catch (e) { toast(e.message); } };
+$("expGo").onclick = async () => {
+  $("expGo").disabled = true; setStatus("expStatus", "מייצא…");
+  try {
+    const j = await (await api("/api/sfx/export", { paths_json: JSON.stringify([...sfxSel]), folder: $("expDir").value.trim(),
+      fmt: $("expFmt").value, english_names: $("expEn").checked, sample_rate: $("expSr").value })).json();
+    setStatus("expStatus", `יוצאו ${j.files.length} קבצים ✓`, "ok");
+    const b = el("button", "btn sec small", "פתח"); b.onclick = () => api("/api/reveal", { path: j.folder }); $("expStatus").append(" ", b);
+  } catch (e) { setStatus("expStatus", e.message, "err"); } finally { $("expGo").disabled = !sfxSel.size; }
+};
+
+/* --- editor --- */
+let ED = null;
+async function openEditor(s) {
+  ED = { s, buf: null }; $("edTitle").textContent = `עריכה · ${s.name}`; $("edName").value = ""; setStatus("edStatus", "");
+  $("sfxEdit").showModal();
+  try {
+    const data = await (await fetch(fileUrl(s.path))).arrayBuffer();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    ED.ctx = ctx; ED.buf = await ctx.decodeAudioData(data);
+    const d = ED.buf.duration.toFixed(2);
+    for (const id of ["edStart", "edEnd"]) $(id).max = d;
+    $("edStart").value = 0; $("edEnd").value = d; edVals(); drawWave();
+  } catch (e) { setStatus("edStatus", "לא הצלחתי לקרוא את הצליל: " + e.message, "err"); }
+}
+function edVals() {
+  if (+$("edStart").value > +$("edEnd").value - 0.05) $("edStart").value = Math.max(0, +$("edEnd").value - 0.05);
+  $("edStartV").textContent = (+$("edStart").value).toFixed(2); $("edEndV").textContent = (+$("edEnd").value).toFixed(2);
+  $("edGainV").textContent = `${$("edGain").value}dB`; $("edFiV").textContent = $("edFi").value; $("edFoV").textContent = $("edFo").value;
+  drawWave();
+}
+["edStart", "edEnd", "edGain", "edFi", "edFo"].forEach(id => $(id).oninput = edVals);
+function drawWave() {
+  if (!ED?.buf) return;
+  const c = $("edWave"), g = c.getContext("2d"), w = c.width, h = c.height, d = ED.buf.getChannelData(0), step = Math.ceil(d.length / w);
+  const css = getComputedStyle(document.body);
+  g.clearRect(0, 0, w, h);
+  const a = +$("edStart").value / ED.buf.duration * w, b = +$("edEnd").value / ED.buf.duration * w;
+  g.fillStyle = "rgba(255,255,255,.05)"; g.fillRect(a, 0, b - a, h);
+  for (let x = 0; x < w; x++) {
+    let mn = 1, mx = -1;
+    for (let i = x * step; i < Math.min(d.length, (x + 1) * step); i++) { const v = d[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+    g.fillStyle = x >= a && x <= b ? (css.getPropertyValue("--accent").trim() || "#ff4fa3") : "rgba(140,140,170,.45)";
+    g.fillRect(x, (1 - mx) * h / 2, 1, Math.max(1, (mx - mn) * h / 2));
+  }
+}
+$("edPlay").onclick = () => {
+  if (!ED?.buf) return;
+  ED.src?.stop();
+  const src = ED.ctx.createBufferSource(), gain = ED.ctx.createGain(); src.buffer = ED.buf;
+  const st = +$("edStart").value, en = +$("edEnd").value, now = ED.ctx.currentTime, len = en - st;
+  const k = Math.pow(10, +$("edGain").value / 20), fi = Math.min(+$("edFi").value, len), fo = Math.min(+$("edFo").value, len);
+  gain.gain.setValueAtTime(fi ? 0 : k, now); if (fi) gain.gain.linearRampToValueAtTime(k, now + fi);
+  if (fo) { gain.gain.setValueAtTime(k, now + len - fo); gain.gain.linearRampToValueAtTime(0, now + len); }
+  src.connect(gain).connect(ED.ctx.destination); src.loop = $("edLoop").checked;
+  if (src.loop) { src.loopStart = st; src.loopEnd = en; src.start(now, st); setTimeout(() => src.stop(), Math.max(4000, len * 3000)); }
+  else src.start(now, st, len);
+  ED.src = src;
+};
+$("edClose").onclick = () => { ED?.src?.stop(); $("sfxEdit").close(); };
+$("edSave").onclick = async () => {
+  $("edSave").disabled = true;
+  try {
+    const j = await (await api("/api/sfx/edit", { path: ED.s.path, start: $("edStart").value, end: $("edEnd").value,
+      gain_db: $("edGain").value, fade_in: $("edFi").value, fade_out: $("edFo").value, loop: $("edLoop").checked,
+      normalize: $("edNorm").checked, name: $("edName").value.trim() })).json();
+    setStatus("edStatus", `נשמר: ${j.name} ✓`, "ok"); loadSounds();
+  } catch (e) { setStatus("edStatus", e.message, "err"); } finally { $("edSave").disabled = false; }
+};
+
+/* --- installing an engine --- */
+let sfxInstId = "";
+function openSfxInstall(id) {
+  sfxInstId = id; const e = SFX?.engines?.[id] || ENGINES?.sfx?.[id]; if (!e) return;
+  $("sfxLicTitle").textContent = `התקנת ${e.name}`;
+  $("sfxLicSub").textContent = `${e.note}. ${e.speed}. גודל ההתקנה: כ־${e.size}.`;
+  $("sfxLicText").innerHTML = "";
+  const t = $("sfxLicText");
+  if (id === "moss") t.append(el("span", "", "רישיון Apache-2.0: מותר לכל שימוש, כולל מסחרי, עם ציון המקור (OpenMOSS)."));
+  else t.append(el("span", "", "רישיון Stability AI Community: חינם למחקר, ללימודים ולשימוש אישי, ולעסקים עם הכנסה של פחות ממיליון דולר בשנה. מעל זה צריך רישיון מ־Stability AI. המודל כולל רכיב של Google (T5Gemma) לפי תנאי Gemma."));
+  const a = el("a", "", " לקריאת הרישיון"); a.href = e.license_url; a.target = "_blank"; a.rel = "noopener"; t.append(a);
+  $("sfxTokenBox").style.display = e.gated ? "" : "none"; $("sfxToken").value = "";
+  $("sfxAccept").checked = false; $("sfxInstGo").disabled = true; setStatus("sfxInstStatus", ""); $("sfxInstProg").style.display = "none";
+  $("sfxLic").showModal();
+}
+$("sfxAccept").onchange = () => $("sfxInstGo").disabled = !$("sfxAccept").checked;
+$("sfxLicClose").onclick = () => $("sfxLic").close();
+$("sfxInstGo").onclick = async () => {
+  $("sfxInstGo").disabled = true; $("sfxInstProg").style.display = "";
+  try {
+    if ($("sfxToken").value.trim()) await saveSettings({ models: { hf_token: $("sfxToken").value.trim() } });
+    const { job } = await (await api(`/api/engines/sfx/${sfxInstId}/install`, { accept_license: true })).json();
+    await pollJob(job, s => { $("sfxInstProg").value = s.done; setStatus("sfxInstStatus", `${Math.round(s.done)}% · ${s.current}`); }, 2000);
+    setStatus("sfxInstStatus", "המנוע הותקן ✓", "ok"); await loadEngines(); loadSfx(); loadSystem().catch(() => {});
+  } catch (e) { setStatus("sfxInstStatus", e.message + " — אפשר ללחוץ שוב, ההתקנה תמשיך מאיפה שעצרה", "err"); $("sfxInstGo").disabled = false; }
+};
+document.querySelector('nav.tabs button[data-tab="sfx"]').addEventListener("click", loadSfx);
+
+/* --- studio panel --- */
+function showVoice() {
+  const c = CHARS.find(x => x.id === $("voice").value); if (!c) return;
+  $("voiceName").textContent = c.name; $("voiceSrc").textContent = c.source;
+  $("voiceAv").textContent = c.name.slice(0, 1); $("voiceAv").style.background = avatarColor(c.name);
+}
+function stepVoice(d) {
+  const s = $("voice"), n = s.options.length; if (!n) return;
+  s.selectedIndex = (s.selectedIndex + d + n) % n; s.dispatchEvent(new Event("change"));
+}
+$("voicePrev").onclick = () => stepVoice(-1); $("voiceNext").onclick = () => stepVoice(1);
+$("voice").addEventListener("change", showVoice);
+$("speed").addEventListener("input", () => $("speedV").textContent = `${(+$("speed").value).toFixed(2).replace(/0$/, "")}x`);
+$("vol").addEventListener("input", () => { $("player").volume = +$("vol").value; $("volV").textContent = `${Math.round($("vol").value * 100)}%`; });
+const PRESET_KEY = "kol-presets";
+const readPresets = () => { try { return JSON.parse(localStorage.getItem(PRESET_KEY) || "[]"); } catch { return []; } };
+function renderPresets() {
+  const box = $("presets"); box.innerHTML = "";
+  const list = readPresets();
+  if (!list.length) box.append(el("span", "hint", "עוד אין פריסטים"));
+  list.forEach((p, i) => {
+    const b = el("button", "", p.name); b.title = `${p.voiceName} · ${p.engine} · ${p.speed}x`;
+    const x = el("span", "x", "✕"); x.title = "מחק";
+    x.onclick = (e) => { e.stopPropagation(); const l = readPresets(); l.splice(i, 1); try { localStorage.setItem(PRESET_KEY, JSON.stringify(l)); } catch {} renderPresets(); };
+    b.append(x);
+    b.onclick = () => {
+      if ([...$("voice").options].some(o => o.value === p.voice)) { $("voice").value = p.voice; showVoice(); }
+      $("engine").value = p.engine; $("speed").value = p.speed; $("speed").dispatchEvent(new Event("input", { bubbles: true }));
+      fishHint(); toast(`פריסט "${p.name}" נטען`);
+    };
+    box.append(b);
+  });
+}
+$("presetSave").onclick = () => {
+  const c = CHARS.find(x => x.id === $("voice").value);
+  const name = prompt("שם לפריסט:", `${c?.name || ""} ${$("speed").value}x`.trim()); if (!name) return;
+  const l = readPresets().filter(p => p.name !== name);
+  l.push({ name, voice: $("voice").value, voiceName: c?.name || "", engine: $("engine").value, speed: $("speed").value });
+  try { localStorage.setItem(PRESET_KEY, JSON.stringify(l)); } catch {}
+  renderPresets();
+};
+renderPresets();
+const drop = $("docDrop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => {
+  if (!e.dataTransfer.files.length) return;
+  $("docFile").files = e.dataTransfer.files; $("docFile").dispatchEvent(new Event("change")); $("loadDoc").click();
+});
+$("docFile").addEventListener("change", () => $("docName").textContent = $("docFile").files[0]?.name || "");
+/* spotlight that follows the mouse over glass cards */
+document.addEventListener("pointermove", e => {
+  const c = e.target.closest?.(".card"); if (!c) return;
+  const r = c.getBoundingClientRect();
+  c.style.setProperty("--mx", `${e.clientX - r.left}px`); c.style.setProperty("--my", `${e.clientY - r.top}px`);
+}, { passive: true });
 /* ================= start ================= */
 (async () => {
   await loadSettings().catch(e => toast(e.message));
-  loadEngines();
+  await loadEngines();
   if (!(await checkSetup())) return;
   await loadChars();
-  await loadPalette(); await parseStory(); estimateDoc();
+  await loadPalette(); await parseStory(); estimateDoc(); fillAllRanges();
 })();
 </script>
 </body>

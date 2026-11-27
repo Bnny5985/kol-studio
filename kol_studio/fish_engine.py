@@ -10,18 +10,16 @@ License: Fish Audio Research License — research and non-commercial use only. "
 import io
 import json
 import os
-import platform
 import shutil
 import subprocess
 import sys
-import tarfile
 import threading
 import time
 import urllib.request
 import zipfile
 from pathlib import Path
 
-from . import paths
+from . import engine_tools, paths
 
 DIR = paths.DATA / "engines" / "fish"
 SRC = DIR / "src"
@@ -65,29 +63,7 @@ def device() -> str:
 # ---------- installation ----------
 
 def _uv(job: dict) -> str:
-    """uv (MIT/Apache) builds the engine's Python environment; downloaded once if it is not on this computer."""
-    found = shutil.which("uv") or shutil.which("uv", path=str(DIR / "bin"))
-    if found:
-        return found
-    arch = {"arm64": "aarch64", "aarch64": "aarch64", "x86_64": "x86_64", "AMD64": "x86_64"}[platform.machine()]
-    target = {"darwin": f"{arch}-apple-darwin", "win32": f"{arch}-pc-windows-msvc"}.get(sys.platform,
-                                                                                       f"{arch}-unknown-linux-gnu")
-    ext = "zip" if sys.platform.startswith("win") else "tar.gz"
-    url = f"https://github.com/astral-sh/uv/releases/latest/download/uv-{target}.{ext}"
-    job["current"] = "מוריד את uv"
-    data = urllib.request.urlopen(url, timeout=120).read()
-    (DIR / "bin").mkdir(parents=True, exist_ok=True)
-    name = "uv.exe" if sys.platform.startswith("win") else "uv"
-    if ext == "zip":
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
-            member = next(m for m in z.namelist() if m.endswith(name))
-            (DIR / "bin" / name).write_bytes(z.read(member))
-    else:
-        with tarfile.open(fileobj=io.BytesIO(data)) as t:
-            member = next(m for m in t.getmembers() if m.name.endswith("/" + name) or m.name == name)
-            (DIR / "bin" / name).write_bytes(t.extractfile(member).read())
-    (DIR / "bin" / name).chmod(0o755)
-    return str(DIR / "bin" / name)
+    return engine_tools.uv(job)
 
 
 def _run(cmd: list, job: dict, what: str, cwd: Path | None = None):
